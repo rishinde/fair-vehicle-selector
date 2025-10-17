@@ -22,7 +22,6 @@ def load_data():
         vehicles = data.get("vehicles", [])
         history = data.get("history", [])
         usage = data.get("usage", {})
-        # Safeguard
         if not isinstance(history, list):
             history = []
         if not isinstance(usage, dict):
@@ -54,16 +53,20 @@ def select_vehicles_auto(vehicle_set, player_set, num_needed, usage):
     selected = ordered[:num_needed]
 
     # Update usage
+    update_usage(selected, eligible, usage)
+    return selected
+
+def update_usage(selected, eligible, usage):
+    # Increment used for selected vehicles
     for v in selected:
         if v not in usage:
             usage[v] = {"used":0,"present":0}
-        usage[v]["used"] +=1
+        usage[v]["used"] += 1
+    # Increment present for all eligible vehicles
     for v in eligible:
         if v not in usage:
             usage[v] = {"used":0,"present":0}
-        usage[v]["present"] +=1
-
-    return selected
+        usage[v]["present"] += 1
 
 def generate_message(game_date, ground_name, players, selected):
     message = (
@@ -188,15 +191,17 @@ else:
         manual_selected = []
 
     if st.button("Select Vehicles"):
+        eligible = [v for v in players_today if v in vehicles]
+
         if selection_mode=="Auto-Select":
             selected = select_vehicles_auto(vehicles, players_today, num_needed, usage)
         else:
-            # Manual select enforcement
             if len(manual_selected) != num_needed:
                 st.warning(f"⚠️ Please select exactly {num_needed} vehicles")
                 selected = []
             else:
                 selected = manual_selected
+                update_usage(selected, eligible, usage)  # <-- update usage for manual selection
 
         if not selected:
             st.warning("⚠️ No vehicles selected")
