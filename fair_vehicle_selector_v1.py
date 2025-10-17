@@ -225,4 +225,27 @@ else:
 # -----------------------------
 # Usage Table & Chart
 # -----------------------------
-st.header("5️⃣ Vehicle
+st.header("5️⃣ Vehicle Usage")
+if usage:
+    df_usage = pd.DataFrame([
+        {"Vehicle": k, "Used": v["used"], "Present": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
+        for k,v in usage.items()
+    ])
+    st.table(df_usage)
+
+    fig = px.bar(df_usage, x="Vehicle", y="Ratio", text="Used", title="Vehicle Usage Fairness")
+    fig.update_traces(textposition='outside')
+    fig.update_layout(yaxis=dict(range=[0,1.2]))
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("No usage data yet")
+
+# -----------------------------
+# Recent Match Records
+# -----------------------------
+st.header("6️⃣ Recent Match Records")
+if history:
+    for r in reversed(history[-10:]):
+        st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {', '.join(r['selected_vehicles'])}")
+else:
+    st.info("No match records yet")
