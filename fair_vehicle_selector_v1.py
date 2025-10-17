@@ -4,7 +4,6 @@ import os
 from datetime import date
 import pandas as pd
 import plotly.express as px
-import urllib.parse
 
 # -----------------------------
 # Constants
@@ -19,12 +18,16 @@ def load_data():
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, "r") as f:
             data = json.load(f)
-        return (
-            data.get("players", []),
-            data.get("vehicles", []),
-            data.get("history", []),
-            data.get("usage", {})
-        )
+        players = data.get("players", [])
+        vehicles = data.get("vehicles", [])
+        history = data.get("history", [])
+        usage = data.get("usage", {})
+        # Safeguard: ensure history is list
+        if not isinstance(history, list):
+            history = []
+        if not isinstance(usage, dict):
+            usage = {}
+        return players, vehicles, history, usage
     else:
         return [], [], [], {}
 
@@ -39,79 +42,68 @@ def save_csv(history):
         df = pd.DataFrame(history)
         df.to_csv(CSV_FILE, index=False)
 
-def select_vehicles(vehicle_set, player_set, num_needed, usage):
-    # Eligible vehicles = present players who own vehicles
+def select_vehicles_auto(vehicle_set, player_set, num_needed, usage):
     eligible = [v for v in player_set if v in vehicle_set]
     if not eligible:
         return []
-
-    # Sort by usage ratio (Used / Present)
+    # Sort by usage ratio
     def usage_ratio(v):
         u = usage.get(v, {"used":0, "present":0})
-        return u["used"]/u["present"] if u["present"] > 0 else 0
-
-    ordered = sorted(
-        eligible,
-        key=lambda v: (usage_ratio(v), vehicle_set.index(v))
-    )
-
+        return u["used"]/u["present"] if u["present"]>0 else 0
+    ordered = sorted(eligible, key=lambda v: (usage_ratio(v), vehicle_set.index(v)))
     selected = ordered[:num_needed]
 
-    # Update usage counts
+    # Update usage
     for v in selected:
         if v not in usage:
-            usage[v] = {"used": 0, "present": 0}
-        usage[v]["used"] += 1
-
-    # Update present count for all players present who own vehicles
+            usage[v] = {"used":0,"present":0}
+        usage[v]["used"] +=1
     for v in eligible:
         if v not in usage:
-            usage[v] = {"used": 0, "present": 0}
-        usage[v]["present"] += 1
+            usage[v] = {"used":0,"present":0}
+        usage[v]["present"] +=1
 
     return selected
 
-def generate_whatsapp_message(game_date, ground_name, players, selected):
+def generate_message(game_date, ground_name, players, selected):
     message = (
-        f"🏏 *Match / Practice Details*\n"
+        f"🏏 Match / Practice Details\n"
         f"📅 Date: {game_date}\n"
         f"📍 Venue: {ground_name}\n\n"
         f"👥 Team:\n" + "\n".join([f"- {p}" for p in players]) + "\n\n"
         f"🚗 Vehicles:\n" + "\n".join([f"- {v}" for v in selected])
     )
-    encoded = urllib.parse.quote(message)
-    link = f"https://wa.me/?text={encoded}"
-    return message, link
+    return message
 
 def undo_last_entry(history, usage):
-    if not history:
+    if not history or not isinstance(history, list):
         return history, usage, False
     last = history.pop()
-    for v in last["selected_vehicles"]:
-        if v in usage and usage[v]["used"] > 0:
-            usage[v]["used"] -= 1
-    for v in last["players_present"]:
-        if v in usage and usage[v]["present"] > 0:
+    for v in last.get("selected_vehicles", []):
+        if v in usage and usage[v]["used"]>0:
+            usage[v]["used"] -=1
+    for v in last.get("players_present", []):
+        if v in usage and usage[v]["present"]>0:
             usage[v]["present"] -=1
     return history, usage, True
 
 # -----------------------------
-# Streamlit App
+# Streamlit UI
 # -----------------------------
 st.set_page_config(page_title="Fair Vehicle Selector", page_icon="🚗", layout="centered")
 st.title("🚗 Fair Vehicle Selector")
-st.caption("Attendance-aware, fair vehicle distribution with WhatsApp message & undo feature")
+st.caption("Attendance-aware, fair vehicle distribution with auto/manual select and undo feature")
 
 players, vehicles, history, usage = load_data()
 
 # -----------------------------
-# Sidebar: Admin controls
+# Sidebar: Admin
 # -----------------------------
 st.sidebar.header("⚙️ Admin Controls")
 if st.sidebar.button("🧹 Reset All Data"):
     players, vehicles, history, usage = [], [], [], {}
     save_data(players, vehicles, history, usage)
-    st.sidebar.success("✅ All data reset.")
+    st.sidebar.success("✅ All data reset")
 
 if st.sidebar.button("↩ Undo Last Entry"):
     history, usage, undone = undo_last_entry(history, usage)
@@ -122,7 +114,7 @@ if st.sidebar.button("↩ Undo Last Entry"):
         st.sidebar.info("ℹ️ No record to undo")
 
 # -----------------------------
-# Manage Players Superset
+# Player Superset
 # -----------------------------
 st.header("1️⃣ Players Superset")
 new_player = st.text_input("Add new player:")
@@ -148,7 +140,7 @@ if players:
 st.write("**Current Players:**", ", ".join(players))
 
 # -----------------------------
-# Manage Vehicle Set
+# Vehicle Set
 # -----------------------------
 st.header("2️⃣ Vehicle Set (subset of players)")
 new_vehicle = st.text_input("Add vehicle owner:")
@@ -158,7 +150,7 @@ if st.button("Add Vehicle"):
         save_data(players, vehicles, history, usage)
         st.success(f"✅ Added vehicle owner: {new_vehicle}")
     elif new_vehicle not in players:
-        st.warning("⚠️ Player must exist in superset first")
+        st.warning("⚠️ Player must exist in superset")
     elif new_vehicle in vehicles:
         st.warning("⚠️ Already a vehicle owner")
 
@@ -176,33 +168,38 @@ st.write("**Current Vehicle Owners:**", ", ".join(vehicles))
 # -----------------------------
 st.header("3️⃣ Daily Match Selection")
 if not players:
-    st.warning("Please add at least one player first")
+    st.warning("Please add at least one player")
 else:
     game_date = st.date_input("Select date:", value=date.today())
     ground_name = st.text_input("Ground name:")
     players_today = st.multiselect("Select players present today:", players)
     num_needed = st.number_input("Number of vehicles needed:", 1, len(vehicles) if vehicles else 1, 1)
+    selection_mode = st.radio("Vehicle Selection Mode:", ["Auto-Select", "Manual-Select"])
 
     if st.button("Select Vehicles"):
-        selected = select_vehicles(vehicles, players_today, num_needed, usage)
+        if selection_mode=="Auto-Select":
+            selected = select_vehicles_auto(vehicles, players_today, num_needed, usage)
+        else:
+            # Manual select
+            selected = st.multiselect("Select vehicles manually:", vehicles, default=[])
+
         if not selected:
-            st.warning("⚠️ No eligible vehicles today")
+            st.warning("⚠️ No vehicles selected")
         else:
             st.success(f"✅ Vehicles selected: {', '.join(selected)}")
 
-            # Emergency swap of last vehicle
-            if len(selected) > 0:
+            # Emergency swap
+            if len(selected)>0:
                 swap_choice = st.selectbox("Change last vehicle (if needed):", ["None"] + [v for v in vehicles if v not in selected])
                 if swap_choice != "None":
                     replaced = selected[-1]
                     selected[-1] = swap_choice
                     st.info(f"🔁 Replaced {replaced} with {swap_choice}")
 
-            # Generate WhatsApp message
-            msg, link = generate_whatsapp_message(game_date, ground_name, players_today, selected)
-            st.subheader("📋 WhatsApp-Ready Message")
+            # Generate message
+            msg = generate_message(game_date, ground_name, players_today, selected)
+            st.subheader("📋 Copy-Ready Message")
             st.text_area("Message:", msg, height=200)
-            st.markdown(f"[📲 Open in WhatsApp]({link})", unsafe_allow_html=True)
 
             # Save record
             record = {
@@ -210,37 +207,22 @@ else:
                 "ground": ground_name,
                 "players_present": players_today,
                 "selected_vehicles": selected,
-                "whatsapp_message": msg
+                "message": msg
             }
             history.append(record)
             save_data(players, vehicles, history, usage)
 
 # -----------------------------
+# Download CSV
+# -----------------------------
+st.header("4️⃣ Download CSV Backup")
+if os.path.exists(CSV_FILE):
+    with open(CSV_FILE, "rb") as f:
+        st.download_button("📥 Download CSV", f, file_name=CSV_FILE)
+else:
+    st.info("No CSV available yet")
+
+# -----------------------------
 # Usage Table & Chart
 # -----------------------------
-st.header("4️⃣ Vehicle Usage History")
-if usage:
-    df_usage = pd.DataFrame([
-        {"Vehicle": k, "Used": v["used"], "Present": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
-        for k,v in usage.items()
-    ])
-    st.table(df_usage)
-else:
-    st.info("No usage data yet")
-
-st.header("📊 Usage Fairness Chart")
-if usage:
-    fig = px.bar(df_usage, x="Vehicle", y="Ratio", text="Used", title="Vehicle Usage Fairness")
-    fig.update_traces(textposition='outside')
-    fig.update_layout(yaxis=dict(range=[0,1.2]))
-    st.plotly_chart(fig, use_container_width=True)
-
-# -----------------------------
-# Recent Match Records
-# -----------------------------
-st.header("5️⃣ Recent Match Records")
-if history:
-    for r in reversed(history[-10:]):
-        st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {', '.join(r['selected_vehicles'])}")
-else:
-    st.info("No match records yet")
+st.header("5️⃣ Vehicle
