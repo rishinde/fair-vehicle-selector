@@ -22,7 +22,7 @@ def load_data():
         vehicles = data.get("vehicles", [])
         history = data.get("history", [])
         usage = data.get("usage", {})
-        # Safeguard: ensure history is list
+        # Safeguard
         if not isinstance(history, list):
             history = []
         if not isinstance(usage, dict):
@@ -67,7 +67,7 @@ def select_vehicles_auto(vehicle_set, player_set, num_needed, usage):
 
 def generate_message(game_date, ground_name, players, selected):
     message = (
-        f"🏏 Match / Practice Details\n"
+        f"🏏 Match Details\n"
         f"📅 Date: {game_date}\n"
         f"📍 Venue: {ground_name}\n\n"
         f"👥 Team:\n" + "\n".join([f"- {p}" for p in players]) + "\n\n"
@@ -174,14 +174,29 @@ else:
     ground_name = st.text_input("Ground name:")
     players_today = st.multiselect("Select players present today:", players)
     num_needed = st.number_input("Number of vehicles needed:", 1, len(vehicles) if vehicles else 1, 1)
-    selection_mode = st.radio("Vehicle Selection Mode:", ["Auto-Select", "Manual-Select"])
+    selection_mode = st.radio("Vehicle Selection Mode:", ["Auto-Select", "Manual-Select"], key="mode")
+
+    # Manual select multiselect outside button
+    if selection_mode == "Manual-Select":
+        manual_selected = st.multiselect(
+            "Select vehicles manually:",
+            options=vehicles,
+            default=[],
+            help=f"Select exactly {num_needed} vehicles"
+        )
+    else:
+        manual_selected = []
 
     if st.button("Select Vehicles"):
         if selection_mode=="Auto-Select":
             selected = select_vehicles_auto(vehicles, players_today, num_needed, usage)
         else:
-            # Manual select
-            selected = st.multiselect("Select vehicles manually:", vehicles, default=[])
+            # Manual select enforcement
+            if len(manual_selected) != num_needed:
+                st.warning(f"⚠️ Please select exactly {num_needed} vehicles")
+                selected = []
+            else:
+                selected = manual_selected
 
         if not selected:
             st.warning("⚠️ No vehicles selected")
