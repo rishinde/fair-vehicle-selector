@@ -50,39 +50,39 @@ def save_csv(history):
         df = pd.DataFrame(history)
         df.to_csv(CSV_FILE, index=False)
 
-def update_usage(selected, eligible, usage):
-    # Increment used for selected vehicles
-    for v in selected:
-        if v not in usage:
-            usage[v] = {"used":0,"present":0}
-        usage[v]["used"] += 1
-    # Increment present for all eligible vehicles
-    for v in eligible:
-        if v not in usage:
-            usage[v] = {"used":0,"present":0}
-        usage[v]["present"] += 1
+def update_usage(selected_players, eligible_players, usage):
+    # Increment used for selected players
+    for p in selected_players:
+        if p not in usage:
+            usage[p] = {"used":0,"present":0}
+        usage[p]["used"] += 1
+    # Increment present for all eligible players (who own vehicles)
+    for p in eligible_players:
+        if p not in usage:
+            usage[p] = {"used":0,"present":0}
+        usage[p]["present"] +=1
 
 def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_groups):
-    # Ensure vehicle group constraints
+    # Auto-select players ensuring no two players from same group together
     selected = []
     eligible = [v for v in players_today if v in vehicle_set]
-    temp_usage = usage.copy()
-    
+
     for _ in range(num_needed):
         if not eligible:
             break
         # Sort by usage ratio
-        def usage_ratio(v):
-            u = temp_usage.get(v, {"used":0,"present":0})
+        def usage_ratio(p):
+            u = usage.get(p, {"used":0,"present":0})
             return u["used"]/u["present"] if u["present"]>0 else 0
-        ordered = sorted(eligible, key=lambda v: (usage_ratio(v), vehicle_set.index(v)))
+        ordered = sorted(eligible, key=lambda p: (usage_ratio(p), vehicle_set.index(p)))
         pick = ordered[0]
         selected.append(pick)
         update_usage([pick], eligible, usage)
-        # Remove players in same vehicle group from eligible
-        for vehicle, group_members in vehicle_groups.items():
-            if pick in group_members:
-                eligible = [e for e in eligible if e not in group_members]
+
+        # Remove other players from same group
+        for members in vehicle_groups.values():
+            if pick in members:
+                eligible = [e for e in eligible if e not in members]
                 break
         else:
             eligible.remove(pick)
@@ -90,7 +90,7 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
 
 def generate_message(game_date, ground_name, players, selected):
     message = (
-        f"🏏 Match / Practice Details\n"
+        f"🏏 Match Details\n"
         f"📅 Date: {game_date}\n"
         f"📍 Venue: {ground_name}\n\n"
         f"👥 Team:\n" + "\n".join([f"- {p}" for p in players]) + "\n\n"
@@ -121,7 +121,7 @@ if not st.session_state.admin_logged_in:
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
     if st.button("Login"):
-        if username == "admin" and password == "admin123":
+        if username=="admin" and password=="admin123":
             st.session_state.admin_logged_in = True
             st.success("✅ Logged in as Admin")
         else:
@@ -220,7 +220,6 @@ if st.session_state.admin_logged_in:
             vehicle_groups[vg_vehicle] = vg_members
             save_data(players, vehicles, history, usage, vehicle_groups)
             st.success(f"✅ Group updated for {vg_vehicle}")
-
 st.write("**Current Vehicle Groups:**")
 if vehicle_groups:
     for v, members in vehicle_groups.items():
@@ -239,7 +238,6 @@ if st.session_state.admin_logged_in:
     num_needed = st.number_input("Number of vehicles needed:", 1, len(vehicles) if vehicles else 1, 1)
     selection_mode = st.radio("Vehicle Selection Mode:", ["Auto-Select", "Manual-Select"], key="mode")
     
-    # Manual select multiselect outside button
     if selection_mode == "Manual-Select":
         manual_selected = st.multiselect(
             "Select vehicles manually:",
@@ -310,11 +308,11 @@ else:
 st.header("6️⃣ Vehicle Usage")
 if usage:
     df_usage = pd.DataFrame([
-        {"Vehicle": k, "Used": v["used"], "Present": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
+        {"Player": k, "Used": v["used"], "Present": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
         for k,v in usage.items()
     ])
     st.table(df_usage)
-    fig = px.bar(df_usage, x="Vehicle", y="Ratio", text="Used", title="Vehicle Usage Fairness")
+    fig = px.bar(df_usage, x="Player", y="Ratio", text="Used", title="Player Vehicle Usage Fairness")
     fig.update_traces(textposition='outside')
     fig.update_layout(yaxis=dict(range=[0,1.2]))
     st.plotly_chart(fig, use_container_width=True)
