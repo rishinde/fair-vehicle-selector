@@ -97,9 +97,11 @@ def save_sheet_df(sheet, worksheet_name, df):
         except Exception as e:
             st.warning(f"Cannot save to sheet: {e}")
 
+# ------------------ APP UI ------------------
+st.title("Fair Vehicle Selector")
+
 # ------------------ PLAYER / VEHICLE / GROUP MANAGEMENT ------------------
 st.header("Manage Data")
-
 if st.session_state.logged_in:
     # Player Superset
     with st.expander("Player Superset"):
@@ -109,16 +111,7 @@ if st.session_state.logged_in:
                 st.session_state.player_superset.append(new_player)
         if st.button("Reset Players"):
             st.session_state.player_superset = []
-
         st.write(st.session_state.player_superset)
-        if st.button("Upload Player Superset from CSV"):
-            file = st.file_uploader("Upload CSV", type="csv", key="player_csv")
-            if file:
-                df = pd.read_csv(file)
-                st.session_state.player_superset = df.iloc[:,0].tolist()
-        if st.button("Load Player Superset from Google Sheet"):
-            df = load_sheet_df(SHEET_NAME, "Players", headers=["Player"])
-            st.session_state.player_superset = df["Player"].tolist()
 
     # Vehicle Set
     with st.expander("Vehicle Set"):
@@ -129,14 +122,6 @@ if st.session_state.logged_in:
         if st.button("Reset Vehicles"):
             st.session_state.vehicle_set = []
         st.write(st.session_state.vehicle_set)
-        if st.button("Upload Vehicles from CSV"):
-            file = st.file_uploader("Upload CSV", type="csv", key="vehicle_csv")
-            if file:
-                df = pd.read_csv(file)
-                st.session_state.vehicle_set = df.iloc[:,0].tolist()
-        if st.button("Load Vehicles from Google Sheet"):
-            df = load_sheet_df(SHEET_NAME, "Vehicles", headers=["Vehicle"])
-            st.session_state.vehicle_set = df["Vehicle"].tolist()
 
     # Vehicle Groups
     with st.expander("Vehicle Groups"):
@@ -148,26 +133,25 @@ if st.session_state.logged_in:
         if st.button("Reset Groups"):
             st.session_state.vehicle_groups = []
         st.write(st.session_state.vehicle_groups)
-        if st.button("Upload Groups from CSV"):
-            file = st.file_uploader("Upload CSV", type="csv", key="group_csv")
-            if file:
-                df = pd.read_csv(file)
-                st.session_state.vehicle_groups = df.values.tolist()
-        if st.button("Load Groups from Google Sheet"):
-            df = load_sheet_df(SHEET_NAME, "VehicleGroups", headers=["Vehicle","Players"])
-            groups = []
-            for i, row in df.iterrows():
-                groups.append([p.strip() for p in row["Players"].split(",") if p.strip()])
-            st.session_state.vehicle_groups = groups
 
 # ------------------ MATCH DETAILS ------------------
 st.header("Match Details")
 match_date = st.date_input("Date", value=date.today())
 venue = st.text_input("Venue")
 selected_players = st.multiselect("Select players for match", st.session_state.player_superset)
-num_vehicles = st.number_input("Number of vehicles needed", min_value=1, max_value=len(selected_players), value=1)
-auto_manual = st.radio("Vehicle selection method", ["Auto", "Manual"])
 
+if selected_players:
+    num_vehicles = st.number_input(
+        "Number of vehicles needed",
+        min_value=1,
+        max_value=len(selected_players),
+        value=1
+    )
+else:
+    st.info("Select at least one player to choose vehicles")
+    num_vehicles = 0
+
+auto_manual = st.radio("Vehicle selection method", ["Auto", "Manual"])
 selected_vehicles = []
 
 if st.button("Select Vehicles"):
@@ -189,11 +173,10 @@ if st.button("Select Vehicles"):
                     break
     else:
         selected_vehicles = st.multiselect("Select vehicles manually", st.session_state.vehicle_set)
-
 st.write("Selected Vehicles:", selected_vehicles)
 
-# ------------------ UNDO / RESET / CSV ------------------
-col1, col2, col3 = st.columns(3)
+# ------------------ UNDO / RESET ------------------
+col1, col2 = st.columns(2)
 with col1:
     if st.button("Undo Last Entry"):
         if st.session_state.history:
@@ -204,16 +187,6 @@ with col2:
         st.session_state.vehicle_set = []
         st.session_state.vehicle_groups = []
         st.session_state.history = []
-with col3:
-    csv_data = pd.DataFrame(st.session_state.history).to_csv(index=False).encode("utf-8")
-    st.download_button("Download History CSV", csv_data, "history.csv", "text/csv")
-upload_file = st.file_uploader("Upload CSV to restore history", type="csv")
-if upload_file:
-    if st.session_state.logged_in:
-        df = pd.read_csv(upload_file)
-        st.session_state.history = df.to_dict("records")
-    else:
-        st.warning("Admin login required to upload CSV")
 
 # ------------------ GENERATE MATCH MESSAGE ------------------
 if st.button("Generate Match Message"):
@@ -226,22 +199,25 @@ if st.button("Generate Match Message"):
         "Vehicles": ", ".join(selected_vehicles)
     })
 
-# ------------------ GOOGLE SHEETS SYNC ------------------
+# ------------------ GOOGLE SHEETS SAVE ------------------
 if st.session_state.logged_in and GOOGLE_SHEETS_AVAILABLE:
-    if st.button("Sync All Data to Google Sheet"):
-        # Players
-        df = pd.DataFrame({"Player": st.session_state.player_superset})
-        save_sheet_df(SHEET_NAME, "Players", df)
-        # Vehicles
-        df = pd.DataFrame({"Vehicle": st.session_state.vehicle_set})
-        save_sheet_df(SHEET_NAME, "Vehicles", df)
-        # Vehicle Groups
-        groups_list = []
-        for g in st.session_state.vehicle_groups:
-            groups_list.append({"Vehicle": g[0], "Players": ", ".join(g)})
-        df = pd.DataFrame(groups_list)
-        save_sheet_df(SHEET_NAME, "VehicleGroups", df)
-        # History
-        df = pd.DataFrame(st.session_state.history)
-        save_sheet_df(SHEET_NAME, "History", df)
-        st.success("All data synced to Google Sheet")
+    if st.button("Save All Data to Google Sheet"):
+        save_sheet_df(SHEET_NAME, "Players", pd.DataFrame({"Player": st.session_state.player_superset}))
+        save_sheet_df(SHEET_NAME, "Vehicles", pd.DataFrame({"Vehicle": st.session_state.vehicle_set}))
+        groups_list = [{"Vehicle": g[0], "Players": ", ".join(g)} for g in st.session_state.vehicle_groups]
+        save_sheet_df(SHEET_NAME, "VehicleGroups", pd.DataFrame(groups_list))
+        save_sheet_df(SHEET_NAME, "History", pd.DataFrame(st.session_state.history))
+        st.success("All data saved to Google Sheet")
+
+# ------------------ RESTORE FROM BACKUP FILE ------------------
+upload_file = st.file_uploader("Upload Backup File to Restore All Data", type="json")
+if upload_file:
+    if st.session_state.logged_in:
+        data = json.load(upload_file)
+        st.session_state.player_superset = data.get("player_superset", [])
+        st.session_state.vehicle_set = data.get("vehicle_set", [])
+        st.session_state.vehicle_groups = data.get("vehicle_groups", [])
+        st.session_state.history = data.get("history", [])
+        st.success("All data restored from backup file")
+    else:
+        st.warning("Admin login required to restore data")
