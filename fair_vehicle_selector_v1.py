@@ -30,22 +30,6 @@ if "vehicle_groups" not in st.session_state:
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# ------------------ ADMIN LOGIN ------------------
-def admin_login():
-    with st.sidebar.form("login_form"):
-        st.write("### Admin Login")
-        user = st.text_input("Username")
-        pwd = st.text_input("Password", type="password")
-        submitted = st.form_submit_button("Login")
-        if submitted:
-            if user == ADMIN_USER and pwd == ADMIN_PASS:
-                st.session_state.logged_in = True
-                st.success("Logged in as admin")
-            else:
-                st.error("Invalid credentials")
-if not st.session_state.logged_in:
-    admin_login()
-
 # ------------------ GOOGLE SHEETS FUNCTIONS ------------------
 def get_gsheet_client():
     if not GOOGLE_SHEETS_AVAILABLE:
@@ -63,6 +47,20 @@ def get_gsheet_client():
     except Exception as e:
         st.warning(f"Failed to authorize Google Sheets: {e}")
         return None
+
+def save_sheet_df(sheet, worksheet_name, df):
+    client = get_gsheet_client()
+    if client:
+        try:
+            sh = client.open(sheet)
+            try:
+                ws = sh.worksheet(worksheet_name)
+                ws.clear()
+            except gspread.WorksheetNotFound:
+                ws = sh.add_worksheet(title=worksheet_name, rows="100", cols="20")
+            ws.update([df.columns.tolist()] + df.values.tolist())
+        except Exception as e:
+            st.warning(f"Cannot save to sheet: {e}")
 
 def load_sheet_df(sheet, worksheet_name, headers):
     client = get_gsheet_client()
@@ -83,19 +81,33 @@ def load_sheet_df(sheet, worksheet_name, headers):
     else:
         return pd.DataFrame(columns=headers)
 
-def save_sheet_df(sheet, worksheet_name, df):
-    client = get_gsheet_client()
-    if client:
-        try:
-            sh = client.open(sheet)
-            try:
-                ws = sh.worksheet(worksheet_name)
-                ws.clear()
-            except gspread.WorksheetNotFound:
-                ws = sh.add_worksheet(title=worksheet_name, rows="100", cols="20")
-            ws.update([df.columns.tolist()] + df.values.tolist())
-        except Exception as e:
-            st.warning(f"Cannot save to sheet: {e}")
+# ------------------ ADMIN LOGIN ------------------
+def admin_login():
+    with st.sidebar.form("login_form"):
+        st.write("### Admin Login")
+        user = st.text_input("Username")
+        pwd = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Login")
+        if submitted:
+            if user == ADMIN_USER and pwd == ADMIN_PASS:
+                st.session_state.logged_in = True
+                st.success("Logged in as admin")
+            else:
+                st.error("Invalid credentials")
+
+# Sidebar
+st.sidebar.title("Actions")
+if not st.session_state.logged_in:
+    admin_login()
+else:
+    if st.sidebar.button("Undo Last Entry"):
+        if st.session_state.history:
+            st.session_state.history.pop()
+    if st.sidebar.button("Reset All"):
+        st.session_state.player_superset = []
+        st.session_state.vehicle_set = []
+        st.session_state.vehicle_groups = []
+        st.session_state.history = []
 
 # ------------------ APP UI ------------------
 st.title("Fair Vehicle Selector")
@@ -106,32 +118,36 @@ if st.session_state.logged_in:
     # Player Superset
     with st.expander("Player Superset"):
         new_player = st.text_input("Add Player")
+        remove_player = st.selectbox("Remove Player", st.session_state.player_superset + [""])
         if st.button("Add Player"):
             if new_player and new_player not in st.session_state.player_superset:
                 st.session_state.player_superset.append(new_player)
-        if st.button("Reset Players"):
-            st.session_state.player_superset = []
+        if st.button("Remove Player") and remove_player:
+            if remove_player in st.session_state.player_superset:
+                st.session_state.player_superset.remove(remove_player)
         st.write(st.session_state.player_superset)
 
     # Vehicle Set
     with st.expander("Vehicle Set"):
-        selected_vehicle = st.selectbox("Select Vehicle (from player superset)", st.session_state.player_superset)
-        if st.button("Add Vehicle"):
-            if selected_vehicle and selected_vehicle not in st.session_state.vehicle_set:
-                st.session_state.vehicle_set.append(selected_vehicle)
-        if st.button("Reset Vehicles"):
-            st.session_state.vehicle_set = []
+        add_vehicle = st.selectbox("Add Vehicle", [p for p in st.session_state.player_superset if p not in st.session_state.vehicle_set] + [""])
+        remove_vehicle = st.selectbox("Remove Vehicle", st.session_state.vehicle_set + [""])
+        if st.button("Add Vehicle") and add_vehicle:
+            st.session_state.vehicle_set.append(add_vehicle)
+        if st.button("Remove Vehicle") and remove_vehicle:
+            st.session_state.vehicle_set.remove(remove_vehicle)
         st.write(st.session_state.vehicle_set)
 
     # Vehicle Groups
     with st.expander("Vehicle Groups"):
         group_input = st.text_input("Enter player names separated by comma for group")
-        if st.button("Add Group"):
+        remove_group = st.selectbox("Remove Group", [" , ".join(g) for g in st.session_state.vehicle_groups] + [""])
+        if st.button("Add Group") and group_input:
             group = [p.strip() for p in group_input.split(",") if p.strip()]
             if group:
                 st.session_state.vehicle_groups.append(group)
-        if st.button("Reset Groups"):
-            st.session_state.vehicle_groups = []
+        if st.button("Remove Group") and remove_group:
+            idx = [" , ".join(g) for g in st.session_state.vehicle_groups].index(remove_group)
+            st.session_state.vehicle_groups.pop(idx)
         st.write(st.session_state.vehicle_groups)
 
 # ------------------ MATCH DETAILS ------------------
@@ -156,7 +172,6 @@ selected_vehicles = []
 
 if st.button("Select Vehicles"):
     if auto_manual == "Auto":
-        # simple round robin
         usage_count = {}
         for v in st.session_state.vehicle_set:
             usage_count[v] = sum([v in h['Vehicles'] for h in st.session_state.history])
@@ -175,19 +190,6 @@ if st.button("Select Vehicles"):
         selected_vehicles = st.multiselect("Select vehicles manually", st.session_state.vehicle_set)
 st.write("Selected Vehicles:", selected_vehicles)
 
-# ------------------ UNDO / RESET ------------------
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("Undo Last Entry"):
-        if st.session_state.history:
-            st.session_state.history.pop()
-with col2:
-    if st.button("Reset All Data"):
-        st.session_state.player_superset = []
-        st.session_state.vehicle_set = []
-        st.session_state.vehicle_groups = []
-        st.session_state.history = []
-
 # ------------------ GENERATE MATCH MESSAGE ------------------
 if st.button("Generate Match Message"):
     msg = f"**Match Details**\nDate: {match_date}\nVenue: {venue}\nTeam: {', '.join(selected_players)}\nVehicles: {', '.join(selected_vehicles)}"
@@ -199,17 +201,7 @@ if st.button("Generate Match Message"):
         "Vehicles": ", ".join(selected_vehicles)
     })
 
-# ------------------ GOOGLE SHEETS SAVE ------------------
-if st.session_state.logged_in and GOOGLE_SHEETS_AVAILABLE:
-    if st.button("Save All Data to Google Sheet"):
-        save_sheet_df(SHEET_NAME, "Players", pd.DataFrame({"Player": st.session_state.player_superset}))
-        save_sheet_df(SHEET_NAME, "Vehicles", pd.DataFrame({"Vehicle": st.session_state.vehicle_set}))
-        groups_list = [{"Vehicle": g[0], "Players": ", ".join(g)} for g in st.session_state.vehicle_groups]
-        save_sheet_df(SHEET_NAME, "VehicleGroups", pd.DataFrame(groups_list))
-        save_sheet_df(SHEET_NAME, "History", pd.DataFrame(st.session_state.history))
-        st.success("All data saved to Google Sheet")
-
-# ------------------ RESTORE FROM BACKUP FILE ------------------
+# ------------------ BACKUP / RESTORE ------------------
 upload_file = st.file_uploader("Upload Backup File to Restore All Data", type="json")
 if upload_file:
     if st.session_state.logged_in:
@@ -221,3 +213,13 @@ if upload_file:
         st.success("All data restored from backup file")
     else:
         st.warning("Admin login required to restore data")
+
+# ------------------ PUSH TO GOOGLE SHEETS ------------------
+if st.session_state.logged_in and GOOGLE_SHEETS_AVAILABLE:
+    if st.button("Push All Data to Google Sheets"):
+        save_sheet_df(SHEET_NAME, "Players", pd.DataFrame({"Player": st.session_state.player_superset}))
+        save_sheet_df(SHEET_NAME, "Vehicles", pd.DataFrame({"Vehicle": st.session_state.vehicle_set}))
+        groups_list = [{"Vehicle": g[0], "Players": ", ".join(g)} for g in st.session_state.vehicle_groups]
+        save_sheet_df(SHEET_NAME, "VehicleGroups", pd.DataFrame(groups_list))
+        save_sheet_df(SHEET_NAME, "History", pd.DataFrame(st.session_state.history))
+        st.success("All data saved to Google Sheets")
