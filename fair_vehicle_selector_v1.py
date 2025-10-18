@@ -1,330 +1,153 @@
 import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
 import json
-import os
-from datetime import date
 import pandas as pd
-import plotly.express as px
+from datetime import date
+import random
 
-# -----------------------------
-# Constants
-# -----------------------------
-HISTORY_FILE = "vehicle_history.json"
-CSV_FILE = "vehicle_history.csv"
+# ------------------ SETTINGS ------------------
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets",
+          "https://www.googleapis.com/auth/drive"]
 
-# -----------------------------
-# Helper Functions
-# -----------------------------
-def load_data():
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, "r") as f:
-            data = json.load(f)
-        players = data.get("players", [])
-        vehicles = data.get("vehicles", [])
-        history = data.get("history", [])
-        usage = data.get("usage", {})
-        vehicle_groups = data.get("vehicle_groups", {})
-        if not isinstance(history, list):
-            history = []
-        if not isinstance(usage, dict):
-            usage = {}
-        if not isinstance(vehicle_groups, dict):
-            vehicle_groups = {}
-        return players, vehicles, history, usage, vehicle_groups
+ADMIN_USER = "admin"
+ADMIN_PASS = "admin123"
+
+# ------------------ GOOGLE SHEETS ------------------
+def get_gsheet_client():
+    if "gcp_service_account" in st.secrets:
+        try:
+            sa_info = st.secrets["gcp_service_account"]
+            if isinstance(sa_info, str):
+                sa_info = json.loads(sa_info)
+            creds = Credentials.from_service_account_info(sa_info, scopes=SCOPES)
+            client = gspread.authorize(creds)
+            return client
+        except Exception as e:
+            st.error(f"Failed to authorize using Streamlit Secrets: {e}")
+            st.stop()
     else:
-        return [], [], [], {}, {}
+        st.error("Google Sheets credentials not found in Streamlit Secrets!")
+        st.stop()
 
-def save_data(players, vehicles, history, usage, vehicle_groups):
-    data = {
-        "players": players,
-        "vehicles": vehicles,
-        "history": history,
-        "usage": usage,
-        "vehicle_groups": vehicle_groups
-    }
-    with open(HISTORY_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-    save_csv(history)
+# ------------------ DATA LOADING ------------------
+def load_sheet(sheet_name, worksheet_name="Sheet1"):
+    client = get_gsheet_client()
+    try:
+        sh = client.open(sheet_name)
+        ws = sh.worksheet(worksheet_name)
+        data = pd.DataFrame(ws.get_all_records())
+        return data, ws
+    except Exception as e:
+        st.error(f"Failed to load sheet: {e}")
+        st.stop()
 
-def save_csv(history):
-    if history:
-        df = pd.DataFrame(history)
-        df.to_csv(CSV_FILE, index=False)
+def save_sheet(ws, df):
+    try:
+        ws.clear()
+        ws.update([df.columns.values.tolist()] + df.values.tolist())
+    except Exception as e:
+        st.error(f"Failed to update sheet: {e}")
 
-def update_usage(selected_players, eligible_players, usage):
-    # Increment used for selected players
-    for p in selected_players:
-        if p not in usage:
-            usage[p] = {"used":0,"present":0}
-        usage[p]["used"] += 1
-    # Increment present for all eligible players (who own vehicles)
-    for p in eligible_players:
-        if p not in usage:
-            usage[p] = {"used":0,"present":0}
-        usage[p]["present"] +=1
+# ------------------ SESSION STATE ------------------
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "history" not in st.session_state:
+    st.session_state.history = []
+if "usage" not in st.session_state:
+    st.session_state.usage = {}
 
-def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_groups):
-    # Auto-select players ensuring no two players from same group together
-    selected = []
-    eligible = [v for v in players_today if v in vehicle_set]
-
-    for _ in range(num_needed):
-        if not eligible:
-            break
-        # Sort by usage ratio
-        def usage_ratio(p):
-            u = usage.get(p, {"used":0,"present":0})
-            return u["used"]/u["present"] if u["present"]>0 else 0
-        ordered = sorted(eligible, key=lambda p: (usage_ratio(p), vehicle_set.index(p)))
-        pick = ordered[0]
-        selected.append(pick)
-        update_usage([pick], eligible, usage)
-
-        # Remove other players from same group
-        for members in vehicle_groups.values():
-            if pick in members:
-                eligible = [e for e in eligible if e not in members]
-                break
-        else:
-            eligible.remove(pick)
-    return selected
-
-def generate_message(game_date, ground_name, players, selected):
-    message = (
-        f"🏏 Match Details\n"
-        f"📅 Date: {game_date}\n"
-        f"📍 Venue: {ground_name}\n\n"
-        f"👥 Team:\n" + "\n".join([f"- {p}" for p in players]) + "\n\n"
-        f"🚗 Vehicles:\n" + "\n".join([f"- {v}" for v in selected])
-    )
-    return message
-
-def undo_last_entry(history, usage):
-    if not history or not isinstance(history, list):
-        return history, usage, False
-    last = history.pop()
-    for v in last.get("selected_vehicles", []):
-        if v in usage and usage[v]["used"]>0:
-            usage[v]["used"] -=1
-    for v in last.get("players_present", []):
-        if v in usage and usage[v]["present"]>0:
-            usage[v]["present"] -=1
-    return history, usage, True
-
-# -----------------------------
-# Admin Login
-# -----------------------------
-if "admin_logged_in" not in st.session_state:
-    st.session_state.admin_logged_in = False
-
-if not st.session_state.admin_logged_in:
-    st.subheader("🔒 Admin Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    if st.button("Login"):
-        if username=="admin" and password=="admin123":
-            st.session_state.admin_logged_in = True
-            st.success("✅ Logged in as Admin")
-        else:
-            st.error("❌ Incorrect username or password")
-
-# -----------------------------
-# Load Data
-# -----------------------------
-players, vehicles, history, usage, vehicle_groups = load_data()
-
-# -----------------------------
-# Streamlit UI
-# -----------------------------
-st.set_page_config(page_title="Fair Vehicle Selector", page_icon="🚗", layout="centered")
-st.title("🚗 Fair Vehicle Selector")
-st.caption("Attendance-aware, fair vehicle distribution with admin control and vehicle grouping")
-
-# -----------------------------
-# Admin Controls
-# -----------------------------
-if st.session_state.admin_logged_in:
-    st.sidebar.header("⚙️ Admin Controls")
-    
-    if st.sidebar.button("🧹 Reset All Data"):
-        players, vehicles, history, usage, vehicle_groups = [], [], [], {}, {}
-        save_data(players, vehicles, history, usage, vehicle_groups)
-        st.sidebar.success("✅ All data reset")
-
-    if st.sidebar.button("↩ Undo Last Entry"):
-        history, usage, undone = undo_last_entry(history, usage)
-        save_data(players, vehicles, history, usage, vehicle_groups)
-        if undone:
-            st.sidebar.success("✅ Last entry removed")
-        else:
-            st.sidebar.info("ℹ️ No record to undo")
-else:
-    st.info("You are in guest mode. Admin login required for modifications.")
-
-# -----------------------------
-# Player Superset
-# -----------------------------
-st.header("1️⃣ Players Superset")
-if st.session_state.admin_logged_in:
-    new_player = st.text_input("Add new player:")
-    if st.button("Add Player"):
-        if new_player and new_player not in players:
-            players.append(new_player)
-            save_data(players, vehicles, history, usage, vehicle_groups)
-            st.success(f"✅ Added player: {new_player}")
-        elif new_player in players:
-            st.warning("⚠️ Player already exists")
-        else:
-            st.warning("Enter a valid name")
-    if players:
-        remove_player = st.selectbox("Remove a player:", ["None"] + players)
-        if remove_player != "None" and st.button("Remove Player"):
-            players.remove(remove_player)
-            if remove_player in vehicles:
-                vehicles.remove(remove_player)
-            save_data(players, vehicles, history, usage, vehicle_groups)
-            st.success(f"🗑️ Removed player: {remove_player}")
-st.write("**Current Players:**", ", ".join(players))
-
-# -----------------------------
-# Vehicle Set
-# -----------------------------
-st.header("2️⃣ Vehicle Set (subset of players)")
-if st.session_state.admin_logged_in:
-    new_vehicle = st.text_input("Add vehicle owner:")
-    if st.button("Add Vehicle"):
-        if new_vehicle and new_vehicle in players and new_vehicle not in vehicles:
-            vehicles.append(new_vehicle)
-            save_data(players, vehicles, history, usage, vehicle_groups)
-            st.success(f"✅ Added vehicle owner: {new_vehicle}")
-        elif new_vehicle not in players:
-            st.warning("⚠️ Player must exist in superset")
-        elif new_vehicle in vehicles:
-            st.warning("⚠️ Already a vehicle owner")
-    if vehicles:
-        remove_vehicle = st.selectbox("Remove vehicle owner:", ["None"] + vehicles)
-        if remove_vehicle != "None" and st.button("Remove Vehicle"):
-            vehicles.remove(remove_vehicle)
-            save_data(players, vehicles, history, usage, vehicle_groups)
-            st.success(f"🗑️ Removed vehicle owner: {remove_vehicle}")
-st.write("**Current Vehicle Owners:**", ", ".join(vehicles))
-
-# -----------------------------
-# Vehicle Groups
-# -----------------------------
-st.header("3️⃣ Vehicle Groups")
-if st.session_state.admin_logged_in:
-    vg_vehicle = st.selectbox("Select vehicle to assign group", [""] + vehicles)
-    vg_members = st.multiselect("Select players sharing this vehicle", players)
-    if st.button("Add/Update Vehicle Group"):
-        if vg_vehicle:
-            vehicle_groups[vg_vehicle] = vg_members
-            save_data(players, vehicles, history, usage, vehicle_groups)
-            st.success(f"✅ Group updated for {vg_vehicle}")
-st.write("**Current Vehicle Groups:**")
-if vehicle_groups:
-    for v, members in vehicle_groups.items():
-        st.write(f"{v}: {', '.join(members)}")
-else:
-    st.write("No vehicle groups defined.")
-
-# -----------------------------
-# Daily Match Selection
-# -----------------------------
-st.header("4️⃣ Daily Match Selection")
-if st.session_state.admin_logged_in:
-    game_date = st.date_input("Select date:", value=date.today())
-    ground_name = st.text_input("Ground name:")
-    players_today = st.multiselect("Select players present today:", players)
-    num_needed = st.number_input("Number of vehicles needed:", 1, len(vehicles) if vehicles else 1, 1)
-    selection_mode = st.radio("Vehicle Selection Mode:", ["Auto-Select", "Manual-Select"], key="mode")
-    
-    if selection_mode == "Manual-Select":
-        manual_selected = st.multiselect(
-            "Select vehicles manually:",
-            options=vehicles,
-            default=[],
-            help=f"Select exactly {num_needed} vehicles"
-        )
-    else:
-        manual_selected = []
-
-    if st.button("Select Vehicles"):
-        eligible = [v for v in players_today if v in vehicles]
-
-        if selection_mode=="Auto-Select":
-            selected = select_vehicles_auto(vehicles, players_today, num_needed, usage, vehicle_groups)
-        else:
-            if len(manual_selected) != num_needed:
-                st.warning(f"⚠️ Please select exactly {num_needed} vehicles")
-                selected = []
+# ------------------ AUTH ------------------
+def admin_login():
+    with st.sidebar.form("login_form"):
+        st.write("### Admin Login")
+        user = st.text_input("Username")
+        pwd = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Login")
+        if submitted:
+            if user == ADMIN_USER and pwd == ADMIN_PASS:
+                st.session_state.logged_in = True
+                st.success("Logged in as admin")
             else:
-                selected = manual_selected
-                update_usage(selected, eligible, usage)
+                st.error("Invalid credentials")
 
-        if not selected:
-            st.warning("⚠️ No vehicles selected")
-        else:
-            st.success(f"✅ Vehicles selected: {', '.join(selected)}")
+if not st.session_state.logged_in:
+    admin_login()
 
-            # Emergency swap
-            if len(selected)>0:
-                swap_choice = st.selectbox("Change last vehicle (if needed):", ["None"] + [v for v in vehicles if v not in selected])
-                if swap_choice != "None":
-                    replaced = selected[-1]
-                    selected[-1] = swap_choice
-                    st.info(f"🔁 Replaced {replaced} with {swap_choice}")
+# ------------------ APP ------------------
+st.title("Fair Vehicle Selector")
 
-            # Generate message
-            msg = generate_message(game_date, ground_name, players_today, selected)
-            st.subheader("📋 Copy-Ready Message")
-            st.text_area("Message:", msg, height=200)
+# Load data from Google Sheet
+sheet_name = "Team Management Data"
+players_df, ws_players = load_sheet(sheet_name, "Players")  # superset of players
+vehicles_df, ws_vehicles = load_sheet(sheet_name, "Vehicles")  # vehicles
+groups_df, ws_groups = load_sheet(sheet_name, "VehicleGroups")  # vehicle groups
+history_df, ws_history = load_sheet(sheet_name, "History")  # previous history
 
-            # Save record
-            record = {
-                "date": str(game_date),
-                "ground": ground_name,
-                "players_present": players_today,
-                "selected_vehicles": selected,
-                "message": msg
-            }
-            history.append(record)
-            save_data(players, vehicles, history, usage, vehicle_groups)
+# ------------------ PLAYER SELECTION ------------------
+st.header("Select Players for Today")
+player_options = players_df["Player"].tolist()
+selected_players = st.multiselect("Select players present today", player_options)
+
+# ------------------ VEHICLE SELECTION ------------------
+st.header("Vehicle Selection")
+num_vehicles = st.number_input("Number of vehicles needed", min_value=1, max_value=len(selected_players), value=1)
+
+auto_manual = st.radio("Select vehicles automatically or manually?", ["Auto", "Manual"])
+
+selected_vehicles = []
+
+if auto_manual == "Auto":
+    # Simple round-robin using usage history
+    usage_count = {v: history_df['Vehicles'].tolist().count(v) for v in vehicles_df["Vehicle"].tolist()}
+    sorted_vehicles = sorted(usage_count, key=lambda x: usage_count[x])
+    for i in range(num_vehicles):
+        for v in sorted_vehicles:
+            # Check group constraints
+            group_members = groups_df[groups_df["Vehicle"]==v]["Players"].tolist()
+            conflict = any(p in selected_players for p in group_members)
+            if not conflict:
+                selected_vehicles.append(v)
+                break
 else:
-    st.info("🔒 Daily player/vehicle selection is admin-only. Please login as admin to modify.")
+    selected_vehicles = st.multiselect("Select vehicles manually", vehicles_df["Vehicle"].tolist(), default=[])
 
-# -----------------------------
-# Download CSV
-# -----------------------------
-st.header("5️⃣ Download CSV Backup")
-if os.path.exists(CSV_FILE):
-    with open(CSV_FILE, "rb") as f:
-        st.download_button("📥 Download CSV", f, file_name=CSV_FILE)
-else:
-    st.info("No CSV available yet")
+# ------------------ UNDO LAST ENTRY ------------------
+if st.button("Undo Last Entry"):
+    if not history_df.empty:
+        last_row = history_df.iloc[-1]
+        history_df = history_df.iloc[:-1]
+        save_sheet(ws_history, history_df)
+        st.success("Last entry undone!")
+    else:
+        st.warning("No history to undo")
 
-# -----------------------------
-# Usage Table & Chart
-# -----------------------------
-st.header("6️⃣ Vehicle Usage")
-if usage:
-    df_usage = pd.DataFrame([
-        {"Player": k, "Used": v["used"], "Present": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
-        for k,v in usage.items()
-    ])
-    st.table(df_usage)
-    fig = px.bar(df_usage, x="Player", y="Ratio", text="Used", title="Player Vehicle Usage Fairness")
-    fig.update_traces(textposition='outside')
-    fig.update_layout(yaxis=dict(range=[0,1.2]))
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("No usage data yet")
+# ------------------ GENERATE MESSAGE ------------------
+if st.button("Generate Match Details"):
+    today = str(date.today())
+    match_message = f"**Match Details**\nDate: {today}\nPlayers: {', '.join(selected_players)}\nVehicles: {', '.join(selected_vehicles)}"
+    st.text_area("Ready to copy message", value=match_message, height=150)
 
-# -----------------------------
-# Recent Match Records
-# -----------------------------
-st.header("7️⃣ Recent Match Records")
-if history:
-    for r in reversed(history[-10:]):
-        st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {', '.join(r['selected_vehicles'])}")
-else:
-    st.info("No match records yet")
+    # Append to history
+    new_entry = {"Date": today, "Players": ", ".join(selected_players), "Vehicles": ", ".join(selected_vehicles)}
+    history_df = pd.concat([history_df, pd.DataFrame([new_entry])], ignore_index=True)
+    save_sheet(ws_history, history_df)
+    st.success("History updated!")
+
+# ------------------ CSV Download/Upload ------------------
+st.header("Backup / Restore CSV")
+csv_data = history_df.to_csv(index=False).encode("utf-8")
+st.download_button("Download History CSV", data=csv_data, file_name="history.csv", mime="text/csv")
+
+uploaded_file = st.file_uploader("Upload CSV to restore history", type="csv")
+if uploaded_file and st.session_state.logged_in:
+    try:
+        restored_df = pd.read_csv(uploaded_file)
+        save_sheet(ws_history, restored_df)
+        st.success("History restored from uploaded CSV")
+    except Exception as e:
+        st.error(f"Failed to restore CSV: {e}")
+elif uploaded_file:
+    st.warning("Admin login required to restore CSV")
+
+# ------------------ END OF APP ------------------
