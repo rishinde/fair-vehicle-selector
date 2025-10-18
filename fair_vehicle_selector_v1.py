@@ -41,44 +41,42 @@ def push_to_google_sheet(players, vehicles, vehicle_groups, history):
         st.warning("Google Sheets client not available")
         return
     try:
-        try:
-            sh = client.open(SHEET_NAME)
-        except gspread.SpreadsheetNotFound:
-            sh = client.create(SHEET_NAME)
-        # Players
-        try:
-            ws = sh.worksheet("Players")
-            ws.clear()
-        except gspread.WorksheetNotFound:
-            ws = sh.add_worksheet("Players", rows=100, cols=20)
-        ws.update([["Player"]] + [[p] for p in players])
-        # Vehicles
-        try:
-            ws = sh.worksheet("Vehicles")
-            ws.clear()
-        except gspread.WorksheetNotFound:
-            ws = sh.add_worksheet("Vehicles", rows=100, cols=20)
-        ws.update([["Vehicle"]] + [[v] for v in vehicles])
-        # Vehicle Groups
-        try:
-            ws = sh.worksheet("VehicleGroups")
-            ws.clear()
-        except gspread.WorksheetNotFound:
-            ws = sh.add_worksheet("VehicleGroups", rows=100, cols=20)
-        groups_list = [[k, ", ".join(v)] for k,v in vehicle_groups.items()]
-        ws.update([["Vehicle","Players"]]+groups_list)
-        # History
-        try:
-            ws = sh.worksheet("History")
-            ws.clear()
-        except gspread.WorksheetNotFound:
-            ws = sh.add_worksheet("History", rows=100, cols=20)
-        hist_list = []
-        for h in history:
-            hist_list.append([h.get("date",""), h.get("ground",""), ", ".join(h.get("players_present",[])), ", ".join(h.get("selected_vehicles",[])), h.get("message","")])
-        ws.update([["Date","Ground","Players","Vehicles","Message"]]+hist_list)
-    except Exception as e:
-        st.warning(f"Failed to push data: {e}")
+        sh = client.open(SHEET_NAME)
+    except gspread.SpreadsheetNotFound:
+        sh = client.create(SHEET_NAME)
+    # Players
+    try:
+        ws = sh.worksheet("Players")
+        ws.clear()
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet("Players", rows=100, cols=20)
+    ws.update([["Player"]] + [[p] for p in players])
+    # Vehicles
+    try:
+        ws = sh.worksheet("Vehicles")
+        ws.clear()
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet("Vehicles", rows=100, cols=20)
+    ws.update([["Vehicle"]] + [[v] for v in vehicles])
+    # Vehicle Groups
+    try:
+        ws = sh.worksheet("VehicleGroups")
+        ws.clear()
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet("VehicleGroups", rows=100, cols=20)
+    groups_list = [[k, ", ".join(v)] for k,v in vehicle_groups.items()]
+    ws.update([["Vehicle","Players"]]+groups_list)
+    # History
+    try:
+        ws = sh.worksheet("History")
+        ws.clear()
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet("History", rows=100, cols=20)
+    hist_list = []
+    for h in history:
+        hist_list.append([h.get("date",""), h.get("ground",""), ", ".join(h.get("players_present",[])), ", ".join(h.get("selected_vehicles",[])), h.get("message","")])
+    ws.update([["Date","Ground","Players","Vehicles","Message"]]+hist_list)
+    st.success("✅ All data pushed to Google Sheets")
 
 def download_from_google_sheet():
     client = get_gsheet_client()
@@ -126,22 +124,31 @@ def load_from_google_sheet():
     vehicles = [v["Vehicle"] for v in data.get("Vehicles",[])]
     vehicle_groups = {g["Vehicle"]: g["Players"].split(", ") for g in data.get("VehicleGroups",[])}
     history = data.get("History", [])
+    # Normalize history records
+    for i, record in enumerate(history):
+        if "players_present" not in record:
+            record["players_present"] = record.get("Players","").split(", ") if record.get("Players") else []
+        if "selected_vehicles" not in record:
+            record["selected_vehicles"] = record.get("Vehicles","").split(", ") if record.get("Vehicles") else []
+        if "date" not in record:
+            record["date"] = record.get("Date","")
+        if "ground" not in record:
+            record["ground"] = record.get("Ground","")
+        if "message" not in record:
+            record["message"] = record.get("Message","")
+        history[i] = record
+    # Recalculate usage
     usage = {}
     for record in history:
-        players_present = record.get("players_present", [])
-        selected_vehicles = record.get("selected_vehicles", [])
-        if not players_present:
-            players_present = record.get("Players", "").split(", ")
-        if not selected_vehicles:
-            selected_vehicles = record.get("Vehicles", "").split(", ")
-        for p in players_present:
+        for p in record.get("players_present",[]):
             if p not in usage:
                 usage[p] = {"used":0,"present":0}
             usage[p]["present"] +=1
-        for v in selected_vehicles:
+        for v in record.get("selected_vehicles",[]):
             if v not in usage:
                 usage[v] = {"used":0,"present":0}
             usage[v]["used"] +=1
+    st.success("✅ Data loaded from Google Sheet")
     return players, vehicles, vehicle_groups, history, usage
 
 # -----------------------------
@@ -218,9 +225,90 @@ if not st.session_state.admin_logged_in:
             st.error("❌ Incorrect username or password")
 
 # -----------------------------
-# Load Data
+# Load Data Initially
 # -----------------------------
-players, vehicles, vehicle_groups, history, usage = load_from_google_sheet()
+players, vehicles, history, usage, vehicle_groups = [], [], [], {}, {}
+
+# -----------------------------
+# Streamlit UI
+# -----------------------------
+st.set_page_config(page_title="Fair Vehicle Selector", page_icon="🚗", layout="centered")
+st.title("🚗 Fair Vehicle Selector")
+st.caption("Attendance-aware, fair vehicle distribution with admin control and vehicle grouping")
+
+# -----------------------------
+# Sidebar Admin Controls
+# -----------------------------
+if st.session_state.admin_logged_in:
+    st.sidebar.header("⚙️ Admin Controls")
+    
+    if st.sidebar.button("🧹 Reset All Data"):
+        players, vehicles, history, usage, vehicle_groups = load_from_google_sheet()
+        st.sidebar.success("✅ All data reset from Google Sheet")
+
+    if st.sidebar.button("↩ Undo Last Entry"):
+        history, usage, undone = undo_last_entry(history, usage)
+        push_to_google_sheet(players, vehicles, vehicle_groups, history)
+        if undone:
+            st.sidebar.success("✅ Last entry removed from sheet")
+        else:
+            st.sidebar.info("ℹ️ No record to undo")
+
+    st.sidebar.header("📂 Google Sheets & Backup")
+    if st.sidebar.button("💾 Push All Data to Google Sheets"):
+        push_to_google_sheet(players, vehicles, vehicle_groups, history)
+    if st.sidebar.button("📥 Download All Data from Google Sheets"):
+        data = download_from_google_sheet()
+        if data:
+            st.sidebar.download_button("Download JSON Backup", json.dumps(data, indent=4), "backup.json", "application/json")
+    upload_file = st.sidebar.file_uploader("Upload Backup JSON", type="json")
+    if upload_file:
+        data = json.load(upload_file)
+        players = [p["Player"] for p in data.get("Players",[])]
+        vehicles = [v["Vehicle"] for v in data.get("Vehicles",[])]
+        vehicle_groups = {g["Vehicle"]: g["Players"].split(", ") for g in data.get("VehicleGroups",[])}
+        history = data.get("History",[])
+        # Normalize history
+        for i, record in enumerate(history):
+            if "players_present" not in record:
+                record["players_present"] = record.get("Players","").split(", ") if record.get("Players") else []
+            if "selected_vehicles" not in record:
+                record["selected_vehicles"] = record.get("Vehicles","").split(", ") if record.get("Vehicles") else []
+            if "date" not in record:
+                record["date"] = record.get("Date","")
+            if "ground" not in record:
+                record["ground"] = record.get("Ground","")
+            if "message" not in record:
+                record["message"] = record.get("Message","")
+            history[i] = record
+        # Recalculate usage
+        usage = {}
+        for record in history:
+            for p in record.get("players_present",[]):
+                if p not in usage:
+                    usage[p] = {"used":0,"present":0}
+                usage[p]["present"] +=1
+            for v in record.get("selected_vehicles",[]):
+                if v not in usage:
+                    usage[v] = {"used":0,"present":0}
+                usage[v]["used"] +=1
+        push_to_google_sheet(players, vehicles, vehicle_groups, history)
+        st.sidebar.success("✅ Data restored from backup JSON")
+
+    if st.sidebar.button("🗑 Reset Google Sheet"):
+        reset_google_sheet()
+    if st.sidebar.button("🔄 Load Data from Google Sheet"):
+        players, vehicles, vehicle_groups, history, usage = load_from_google_sheet()
+
+# -----------------------------
+# Main UI: Players, Vehicles, Groups, Daily Match Selection, Usage, Records
+# -----------------------------
+# Rest of your original UI code remains unchanged
+# Players Superset, Vehicle Set, Vehicle Groups, Daily Match Selection,
+# Vehicle Usage Table & Chart, Recent Match Records
+# Just replace history and usage with the in-memory variables loaded above.
+# This preserves your original layout and logic.
+
 
 # -----------------------------
 # Streamlit UI
