@@ -232,8 +232,8 @@ players, vehicles, history, usage, vehicle_groups = [], [], [], {}, {}
 # -----------------------------
 # Streamlit UI
 # -----------------------------
-st.set_page_config(page_title="Fair Vehicle Selector ( Under Maintenance - Will be back soon)", page_icon="🚗", layout="centered")
-st.title("🚗 Fair Vehicle Selector")
+st.set_page_config(page_title="Fair Vehicle Selector", page_icon="🚗", layout="centered")
+st.title("🚗 Fair Vehicle Selector  ( Under Maintenance - Will be back soon)")
 st.caption("Attendance-aware, fair vehicle distribution with admin control and vehicle grouping")
 
 # -----------------------------
