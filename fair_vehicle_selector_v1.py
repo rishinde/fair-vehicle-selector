@@ -1,71 +1,36 @@
 import streamlit as st
-import gspread
-from google.oauth2.service_account import Credentials
-import json
 import pandas as pd
 from datetime import date
 import random
+import json
+
+# Optional Google Sheets
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials
+    GOOGLE_SHEETS_AVAILABLE = True
+except:
+    GOOGLE_SHEETS_AVAILABLE = False
 
 # ------------------ SETTINGS ------------------
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets",
-          "https://www.googleapis.com/auth/drive"]
 ADMIN_USER = "admin"
 ADMIN_PASS = "admin123"
-
-# Name of the pre-created Google Sheet
-sheet_name = "Team Management Data"
-
-# ------------------ GOOGLE SHEETS ------------------
-def get_gsheet_client():
-    if "gcp_service_account" in st.secrets:
-        try:
-            sa_info = st.secrets["gcp_service_account"]
-            if isinstance(sa_info, str):
-                sa_info = json.loads(sa_info)
-            creds = Credentials.from_service_account_info(sa_info, scopes=SCOPES)
-            client = gspread.authorize(creds)
-            return client
-        except Exception as e:
-            st.error(f"Failed to authorize using Streamlit Secrets: {e}")
-            st.stop()
-    else:
-        st.error("Google Sheets credentials not found in Streamlit Secrets!")
-        st.stop()
-
-def ensure_worksheet(ws_list, sh, worksheet_name, headers):
-    """Ensure worksheet exists, create with headers if missing or empty."""
-    try:
-        ws = sh.worksheet(worksheet_name)
-        # Add headers if empty
-        if ws.row_count == 0:
-            ws.append_row(headers)
-    except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title=worksheet_name, rows="100", cols="20")
-        ws.append_row(headers)
-    ws_list[worksheet_name] = ws
-    return ws
-
-def load_sheet_df(ws):
-    try:
-        df = pd.DataFrame(ws.get_all_records())
-    except Exception:
-        df = pd.DataFrame()
-    return df
-
-def save_sheet(ws, df):
-    try:
-        ws.clear()
-        ws.update([df.columns.values.tolist()] + df.values.tolist())
-    except Exception as e:
-        st.error(f"Failed to update sheet: {e}")
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+SHEET_NAME = "Team Management Data"
 
 # ------------------ SESSION STATE ------------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+if "player_superset" not in st.session_state:
+    st.session_state.player_superset = []
+if "vehicle_set" not in st.session_state:
+    st.session_state.vehicle_set = []
+if "vehicle_groups" not in st.session_state:
+    st.session_state.vehicle_groups = []  # list of lists
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# ------------------ AUTH ------------------
+# ------------------ ADMIN LOGIN ------------------
 def admin_login():
     with st.sidebar.form("login_form"):
         st.write("### Admin Login")
@@ -78,97 +43,205 @@ def admin_login():
                 st.success("Logged in as admin")
             else:
                 st.error("Invalid credentials")
-
 if not st.session_state.logged_in:
     admin_login()
 
-# ------------------ APP ------------------
-st.title("Fair Vehicle Selector")
+# ------------------ GOOGLE SHEETS FUNCTIONS ------------------
+def get_gsheet_client():
+    if not GOOGLE_SHEETS_AVAILABLE:
+        return None
+    try:
+        if "gcp_service_account" in st.secrets:
+            sa_info = st.secrets["gcp_service_account"]
+            if isinstance(sa_info, str):
+                sa_info = json.loads(sa_info)
+            creds = Credentials.from_service_account_info(sa_info, scopes=SCOPES)
+            client = gspread.authorize(creds)
+            return client
+        else:
+            return None
+    except Exception as e:
+        st.warning(f"Failed to authorize Google Sheets: {e}")
+        return None
 
-# Get Google Sheets client and open pre-created sheet
-client = get_gsheet_client()
-try:
-    sh = client.open(sheet_name)
-except gspread.SpreadsheetNotFound:
-    st.error(f"Spreadsheet '{sheet_name}' not found. Make sure it exists and is shared with the service account.")
-    st.stop()
+def load_sheet_df(sheet, worksheet_name, headers):
+    client = get_gsheet_client()
+    if client:
+        try:
+            sh = client.open(sheet)
+            try:
+                ws = sh.worksheet(worksheet_name)
+                df = pd.DataFrame(ws.get_all_records())
+                return df
+            except gspread.WorksheetNotFound:
+                ws = sh.add_worksheet(title=worksheet_name, rows="100", cols="20")
+                ws.append_row(headers)
+                return pd.DataFrame(columns=headers)
+        except Exception as e:
+            st.warning(f"Cannot load sheet: {e}")
+            return pd.DataFrame(columns=headers)
+    else:
+        return pd.DataFrame(columns=headers)
 
-# Ensure worksheets exist
-worksheets = {}
-players_ws = ensure_worksheet(worksheets, sh, "Players", headers=["Player"])
-vehicles_ws = ensure_worksheet(worksheets, sh, "Vehicles", headers=["Vehicle"])
-groups_ws = ensure_worksheet(worksheets, sh, "VehicleGroups", headers=["Vehicle","Players"])
-history_ws = ensure_worksheet(worksheets, sh, "History", headers=["Date","Players","Vehicles"])
+def save_sheet_df(sheet, worksheet_name, df):
+    client = get_gsheet_client()
+    if client:
+        try:
+            sh = client.open(sheet)
+            try:
+                ws = sh.worksheet(worksheet_name)
+                ws.clear()
+            except gspread.WorksheetNotFound:
+                ws = sh.add_worksheet(title=worksheet_name, rows="100", cols="20")
+            ws.update([df.columns.tolist()] + df.values.tolist())
+        except Exception as e:
+            st.warning(f"Cannot save to sheet: {e}")
 
-# Load dataframes
-players_df = load_sheet_df(players_ws)
-vehicles_df = load_sheet_df(vehicles_ws)
-groups_df = load_sheet_df(groups_ws)
-history_df = load_sheet_df(history_ws)
+# ------------------ PLAYER / VEHICLE / GROUP MANAGEMENT ------------------
+st.header("Manage Data")
 
-# ------------------ PLAYER SELECTION ------------------
-st.header("Select Players for Today")
-player_options = players_df["Player"].tolist() if not players_df.empty else []
-selected_players = st.multiselect("Select players present today", player_options)
+if st.session_state.logged_in:
+    # Player Superset
+    with st.expander("Player Superset"):
+        new_player = st.text_input("Add Player")
+        if st.button("Add Player"):
+            if new_player and new_player not in st.session_state.player_superset:
+                st.session_state.player_superset.append(new_player)
+        if st.button("Reset Players"):
+            st.session_state.player_superset = []
 
-# ------------------ VEHICLE SELECTION ------------------
-st.header("Vehicle Selection")
+        st.write(st.session_state.player_superset)
+        if st.button("Upload Player Superset from CSV"):
+            file = st.file_uploader("Upload CSV", type="csv", key="player_csv")
+            if file:
+                df = pd.read_csv(file)
+                st.session_state.player_superset = df.iloc[:,0].tolist()
+        if st.button("Load Player Superset from Google Sheet"):
+            df = load_sheet_df(SHEET_NAME, "Players", headers=["Player"])
+            st.session_state.player_superset = df["Player"].tolist()
+
+    # Vehicle Set
+    with st.expander("Vehicle Set"):
+        selected_vehicle = st.selectbox("Select Vehicle (from player superset)", st.session_state.player_superset)
+        if st.button("Add Vehicle"):
+            if selected_vehicle and selected_vehicle not in st.session_state.vehicle_set:
+                st.session_state.vehicle_set.append(selected_vehicle)
+        if st.button("Reset Vehicles"):
+            st.session_state.vehicle_set = []
+        st.write(st.session_state.vehicle_set)
+        if st.button("Upload Vehicles from CSV"):
+            file = st.file_uploader("Upload CSV", type="csv", key="vehicle_csv")
+            if file:
+                df = pd.read_csv(file)
+                st.session_state.vehicle_set = df.iloc[:,0].tolist()
+        if st.button("Load Vehicles from Google Sheet"):
+            df = load_sheet_df(SHEET_NAME, "Vehicles", headers=["Vehicle"])
+            st.session_state.vehicle_set = df["Vehicle"].tolist()
+
+    # Vehicle Groups
+    with st.expander("Vehicle Groups"):
+        group_input = st.text_input("Enter player names separated by comma for group")
+        if st.button("Add Group"):
+            group = [p.strip() for p in group_input.split(",") if p.strip()]
+            if group:
+                st.session_state.vehicle_groups.append(group)
+        if st.button("Reset Groups"):
+            st.session_state.vehicle_groups = []
+        st.write(st.session_state.vehicle_groups)
+        if st.button("Upload Groups from CSV"):
+            file = st.file_uploader("Upload CSV", type="csv", key="group_csv")
+            if file:
+                df = pd.read_csv(file)
+                st.session_state.vehicle_groups = df.values.tolist()
+        if st.button("Load Groups from Google Sheet"):
+            df = load_sheet_df(SHEET_NAME, "VehicleGroups", headers=["Vehicle","Players"])
+            groups = []
+            for i, row in df.iterrows():
+                groups.append([p.strip() for p in row["Players"].split(",") if p.strip()])
+            st.session_state.vehicle_groups = groups
+
+# ------------------ MATCH DETAILS ------------------
+st.header("Match Details")
+match_date = st.date_input("Date", value=date.today())
+venue = st.text_input("Venue")
+selected_players = st.multiselect("Select players for match", st.session_state.player_superset)
 num_vehicles = st.number_input("Number of vehicles needed", min_value=1, max_value=len(selected_players), value=1)
-auto_manual = st.radio("Select vehicles automatically or manually?", ["Auto", "Manual"])
+auto_manual = st.radio("Vehicle selection method", ["Auto", "Manual"])
 
 selected_vehicles = []
 
-if auto_manual == "Auto":
-    if not vehicles_df.empty:
-        usage_count = {v: history_df['Vehicles'].tolist().count(v) for v in vehicles_df["Vehicle"].tolist()} if not history_df.empty else {v:0 for v in vehicles_df["Vehicle"].tolist()}
+if st.button("Select Vehicles"):
+    if auto_manual == "Auto":
+        # simple round robin
+        usage_count = {}
+        for v in st.session_state.vehicle_set:
+            usage_count[v] = sum([v in h['Vehicles'] for h in st.session_state.history])
         sorted_vehicles = sorted(usage_count, key=lambda x: usage_count[x])
         for i in range(num_vehicles):
             for v in sorted_vehicles:
-                group_members = []
-                if not groups_df.empty:
-                    group_members = groups_df[groups_df["Vehicle"]==v]["Players"].tolist()
-                    group_members = [p for g in group_members for p in g.split(",")]  # flatten
-                conflict = any(p in selected_players for p in group_members)
+                conflict = False
+                for g in st.session_state.vehicle_groups:
+                    if v in g and any(p in g for p in selected_players):
+                        conflict = True
+                        break
                 if not conflict and v not in selected_vehicles:
                     selected_vehicles.append(v)
                     break
-else:
-    if not vehicles_df.empty:
-        selected_vehicles = st.multiselect("Select vehicles manually", vehicles_df["Vehicle"].tolist(), default=[])
-
-# ------------------ UNDO LAST ENTRY ------------------
-if st.button("Undo Last Entry"):
-    if not history_df.empty:
-        history_df = history_df.iloc[:-1]
-        save_sheet(history_ws, history_df)
-        st.success("Last entry undone!")
     else:
-        st.warning("No history to undo")
+        selected_vehicles = st.multiselect("Select vehicles manually", st.session_state.vehicle_set)
 
-# ------------------ GENERATE MESSAGE ------------------
-if st.button("Generate Match Details"):
-    today = str(date.today())
-    match_message = f"**Match Details**\nDate: {today}\nPlayers: {', '.join(selected_players)}\nVehicles: {', '.join(selected_vehicles)}"
-    st.text_area("Ready to copy message", value=match_message, height=150)
+st.write("Selected Vehicles:", selected_vehicles)
 
-    # Append to history
-    new_entry = {"Date": today, "Players": ", ".join(selected_players), "Vehicles": ", ".join(selected_vehicles)}
-    history_df = pd.concat([history_df, pd.DataFrame([new_entry])], ignore_index=True)
-    save_sheet(history_ws, history_df)
-    st.success("History updated!")
+# ------------------ UNDO / RESET / CSV ------------------
+col1, col2, col3 = st.columns(3)
+with col1:
+    if st.button("Undo Last Entry"):
+        if st.session_state.history:
+            st.session_state.history.pop()
+with col2:
+    if st.button("Reset All Data"):
+        st.session_state.player_superset = []
+        st.session_state.vehicle_set = []
+        st.session_state.vehicle_groups = []
+        st.session_state.history = []
+with col3:
+    csv_data = pd.DataFrame(st.session_state.history).to_csv(index=False).encode("utf-8")
+    st.download_button("Download History CSV", csv_data, "history.csv", "text/csv")
+upload_file = st.file_uploader("Upload CSV to restore history", type="csv")
+if upload_file:
+    if st.session_state.logged_in:
+        df = pd.read_csv(upload_file)
+        st.session_state.history = df.to_dict("records")
+    else:
+        st.warning("Admin login required to upload CSV")
 
-# ------------------ CSV Download/Upload ------------------
-st.header("Backup / Restore CSV")
-csv_data = history_df.to_csv(index=False).encode("utf-8")
-st.download_button("Download History CSV", data=csv_data, file_name="history.csv", mime="text/csv")
+# ------------------ GENERATE MATCH MESSAGE ------------------
+if st.button("Generate Match Message"):
+    msg = f"**Match Details**\nDate: {match_date}\nVenue: {venue}\nTeam: {', '.join(selected_players)}\nVehicles: {', '.join(selected_vehicles)}"
+    st.text_area("Ready to copy message", msg, height=150)
+    st.session_state.history.append({
+        "Date": str(match_date),
+        "Venue": venue,
+        "Players": ", ".join(selected_players),
+        "Vehicles": ", ".join(selected_vehicles)
+    })
 
-uploaded_file = st.file_uploader("Upload CSV to restore history", type="csv")
-if uploaded_file and st.session_state.logged_in:
-    try:
-        restored_df = pd.read_csv(uploaded_file)
-        save_sheet(history_ws, restored_df)
-        st.success("History restored from uploaded CSV")
-    except Exception as e:
-        st.error(f"Failed to restore CSV: {e}")
-elif uploaded_file:
-    st.warning("Admin login required to restore CSV")
+# ------------------ GOOGLE SHEETS SYNC ------------------
+if st.session_state.logged_in and GOOGLE_SHEETS_AVAILABLE:
+    if st.button("Sync All Data to Google Sheet"):
+        # Players
+        df = pd.DataFrame({"Player": st.session_state.player_superset})
+        save_sheet_df(SHEET_NAME, "Players", df)
+        # Vehicles
+        df = pd.DataFrame({"Vehicle": st.session_state.vehicle_set})
+        save_sheet_df(SHEET_NAME, "Vehicles", df)
+        # Vehicle Groups
+        groups_list = []
+        for g in st.session_state.vehicle_groups:
+            groups_list.append({"Vehicle": g[0], "Players": ", ".join(g)})
+        df = pd.DataFrame(groups_list)
+        save_sheet_df(SHEET_NAME, "VehicleGroups", df)
+        # History
+        df = pd.DataFrame(st.session_state.history)
+        save_sheet_df(SHEET_NAME, "History", df)
+        st.success("All data synced to Google Sheet")
