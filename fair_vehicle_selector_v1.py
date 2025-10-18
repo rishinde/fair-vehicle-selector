@@ -1,12 +1,10 @@
 import streamlit as st
+import json
 from datetime import date
 import pandas as pd
 import plotly.express as px
-import json
 
-# -----------------------------
 # Optional Google Sheets integration
-# -----------------------------
 try:
     import gspread
     from google.oauth2.service_account import Credentials
@@ -14,12 +12,11 @@ try:
 except:
     GOOGLE_SHEETS_AVAILABLE = False
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets",
-          "https://www.googleapis.com/auth/drive"]
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
 SHEET_NAME = "Team Management Data"
 
 # -----------------------------
-# Google Sheets Functions
+# Google Sheets Helper Functions
 # -----------------------------
 def get_gsheet_client():
     if not GOOGLE_SHEETS_AVAILABLE:
@@ -44,48 +41,42 @@ def push_to_google_sheet(players, vehicles, vehicle_groups, history):
         st.warning("Google Sheets client not available")
         return
     try:
-        try:
-            sh = client.open(SHEET_NAME)
-        except gspread.SpreadsheetNotFound:
-            sh = client.create(SHEET_NAME)
-        # Players
-        try:
-            ws = sh.worksheet("Players")
-            ws.clear()
-        except gspread.WorksheetNotFound:
-            ws = sh.add_worksheet("Players", rows=100, cols=20)
-        ws.update([["Player"]] + [[p] for p in players])
-        # Vehicles
-        try:
-            ws = sh.worksheet("Vehicles")
-            ws.clear()
-        except gspread.WorksheetNotFound:
-            ws = sh.add_worksheet("Vehicles", rows=100, cols=20)
-        ws.update([["Vehicle"]] + [[v] for v in vehicles])
-        # Vehicle Groups
-        try:
-            ws = sh.worksheet("VehicleGroups")
-            ws.clear()
-        except gspread.WorksheetNotFound:
-            ws = sh.add_worksheet("VehicleGroups", rows=100, cols=20)
-        groups_list = [[k, ", ".join(v)] for k,v in vehicle_groups.items()]
-        ws.update([["Vehicle","Players"]]+groups_list)
-        # History
-        try:
-            ws = sh.worksheet("History")
-            ws.clear()
-        except gspread.WorksheetNotFound:
-            ws = sh.add_worksheet("History", rows=100, cols=20)
-        hist_list = []
-        for h in history:
-            hist_list.append([h.get("date",""), h.get("ground",""), 
-                              ", ".join(h.get("players_present",[])), 
-                              ", ".join(h.get("selected_vehicles",[])), 
-                              h.get("message","")])
-        ws.update([["Date","Ground","Players","Vehicles","Message"]]+hist_list)
-        st.success("✅ All data pushed to Google Sheets")
-    except Exception as e:
-        st.warning(f"Failed to push data: {e}")
+        sh = client.open(SHEET_NAME)
+    except gspread.SpreadsheetNotFound:
+        sh = client.create(SHEET_NAME)
+    # Players
+    try:
+        ws = sh.worksheet("Players")
+        ws.clear()
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet("Players", rows=100, cols=20)
+    ws.update([["Player"]] + [[p] for p in players])
+    # Vehicles
+    try:
+        ws = sh.worksheet("Vehicles")
+        ws.clear()
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet("Vehicles", rows=100, cols=20)
+    ws.update([["Vehicle"]] + [[v] for v in vehicles])
+    # Vehicle Groups
+    try:
+        ws = sh.worksheet("VehicleGroups")
+        ws.clear()
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet("VehicleGroups", rows=100, cols=20)
+    groups_list = [[k, ", ".join(v)] for k,v in vehicle_groups.items()]
+    ws.update([["Vehicle","Players"]]+groups_list)
+    # History
+    try:
+        ws = sh.worksheet("History")
+        ws.clear()
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet("History", rows=100, cols=20)
+    hist_list = []
+    for h in history:
+        hist_list.append([h.get("date",""), h.get("ground",""), ", ".join(h.get("players_present",[])), ", ".join(h.get("selected_vehicles",[])), h.get("message","")])
+    ws.update([["Date","Ground","Players","Vehicles","Message"]]+hist_list)
+    st.success("✅ All data pushed to Google Sheets")
 
 def download_from_google_sheet():
     client = get_gsheet_client()
@@ -147,12 +138,23 @@ def load_from_google_sheet():
     return players, vehicles, vehicle_groups, history, usage
 
 # -----------------------------
-# App Data (in-memory)
+# App State
 # -----------------------------
-players, vehicles, history, usage, vehicle_groups = [], [], [], {}, {}
+if "admin_logged_in" not in st.session_state:
+    st.session_state.admin_logged_in = False
+if "players" not in st.session_state:
+    st.session_state.players = []
+if "vehicles" not in st.session_state:
+    st.session_state.vehicles = []
+if "vehicle_groups" not in st.session_state:
+    st.session_state.vehicle_groups = {}
+if "history" not in st.session_state:
+    st.session_state.history = []
+if "usage" not in st.session_state:
+    st.session_state.usage = {}
 
 # -----------------------------
-# Vehicle Selection Logic
+# Helper Functions
 # -----------------------------
 def update_usage(selected_players, eligible_players, usage):
     for p in selected_players:
@@ -196,7 +198,7 @@ def generate_message(game_date, ground_name, players, selected):
     return message
 
 def undo_last_entry(history, usage):
-    if not history or not isinstance(history, list):
+    if not history:
         return history, usage, False
     last = history.pop()
     for v in last.get("selected_vehicles", []):
@@ -208,11 +210,70 @@ def undo_last_entry(history, usage):
     return history, usage, True
 
 # -----------------------------
-# Admin Login
+# Admin Sidebar
 # -----------------------------
-if "admin_logged_in" not in st.session_state:
-    st.session_state.admin_logged_in = False
+if st.session_state.admin_logged_in:
+    st.sidebar.header("⚙️ Admin Controls")
+    
+    if st.sidebar.button("🧹 Reset All Data"):
+        st.session_state.players = []
+        st.session_state.vehicles = []
+        st.session_state.vehicle_groups = {}
+        st.session_state.history = []
+        st.session_state.usage = {}
+        st.success("✅ All data reset")
 
+    if st.sidebar.button("↩ Undo Last Entry"):
+        st.session_state.history, st.session_state.usage, undone = undo_last_entry(st.session_state.history, st.session_state.usage)
+        if undone:
+            st.success("✅ Last entry removed")
+        else:
+            st.info("ℹ️ No record to undo")
+
+    # Google Sheets
+    st.sidebar.header("📂 Google Sheets & Backup")
+    if st.sidebar.button("💾 Push All Data to Google Sheets"):
+        push_to_google_sheet(st.session_state.players, st.session_state.vehicles, st.session_state.vehicle_groups, st.session_state.history)
+    if st.sidebar.button("📥 Download All Data from Google Sheets"):
+        data = download_from_google_sheet()
+        if data:
+            st.sidebar.download_button("Download JSON Backup", json.dumps(data, indent=4), "backup.json", "application/json")
+    upload_file = st.sidebar.file_uploader("Upload Backup JSON", type="json")
+    if upload_file:
+        data = json.load(upload_file)
+        st.session_state.players = [p["Player"] for p in data.get("Players",[])]
+        st.session_state.vehicles = [v["Vehicle"] for v in data.get("Vehicles",[])]
+        st.session_state.vehicle_groups = {g["Vehicle"]: g["Players"].split(", ") for g in data.get("VehicleGroups",[])}
+        st.session_state.history = data.get("History",[])
+        st.session_state.usage = {}
+        for record in st.session_state.history:
+            for p in record.get("players_present",[]):
+                if p not in st.session_state.usage:
+                    st.session_state.usage[p] = {"used":0,"present":0}
+                st.session_state.usage[p]["present"] +=1
+            for v in record.get("selected_vehicles",[]):
+                if v not in st.session_state.usage:
+                    st.session_state.usage[v] = {"used":0,"present":0}
+                st.session_state.usage[v]["used"] +=1
+        st.success("✅ Data restored from backup JSON")
+    if st.sidebar.button("🗑 Reset Google Sheet"):
+        reset_google_sheet()
+    if st.sidebar.button("🔄 Load Data from Google Sheet"):
+        players, vehicles, vehicle_groups, history, usage = load_from_google_sheet()
+        st.session_state.players = players
+        st.session_state.vehicles = vehicles
+        st.session_state.vehicle_groups = vehicle_groups
+        st.session_state.history = history
+        st.session_state.usage = usage
+
+# -----------------------------
+# Main UI
+# -----------------------------
+st.set_page_config(page_title="Fair Vehicle Selector", page_icon="🚗", layout="centered")
+st.title("🚗 Fair Vehicle Selector")
+st.caption("Attendance-aware, fair vehicle distribution with admin control and vehicle grouping")
+
+# --- Admin Login ---
 if not st.session_state.admin_logged_in:
     st.subheader("🔒 Admin Login")
     username = st.text_input("Username")
@@ -224,176 +285,85 @@ if not st.session_state.admin_logged_in:
         else:
             st.error("❌ Incorrect username or password")
 
-# -----------------------------
-# Streamlit UI
-# -----------------------------
-st.set_page_config(page_title="Fair Vehicle Selector", page_icon="🚗", layout="centered")
-st.title("🚗 Fair Vehicle Selector")
-st.caption("Attendance-aware, fair vehicle distribution with admin control and vehicle grouping")
-
-# -----------------------------
-# Sidebar Admin Controls
-# -----------------------------
-if st.session_state.admin_logged_in:
-    st.sidebar.header("⚙️ Admin Controls")
-    
-    if st.sidebar.button("🧹 Reset All Data"):
-        players, vehicles, history, usage, vehicle_groups = [], [], [], {}, {}
-        st.sidebar.success("✅ All data reset")
-
-    if st.sidebar.button("↩ Undo Last Entry"):
-        history, usage, undone = undo_last_entry(history, usage)
-        if undone:
-            st.sidebar.success("✅ Last entry removed")
-        else:
-            st.sidebar.info("ℹ️ No record to undo")
-
-    # Google Sheets integration
-    st.sidebar.header("📂 Google Sheets & Backup")
-    if st.sidebar.button("💾 Push All Data to Google Sheets"):
-        push_to_google_sheet(players, vehicles, vehicle_groups, history)
-    if st.sidebar.button("📥 Download All Data from Google Sheets"):
-        data = download_from_google_sheet()
-        if data:
-            st.sidebar.download_button("Download JSON Backup", json.dumps(data, indent=4), "backup.json", "application/json")
-    upload_file = st.sidebar.file_uploader("Upload Backup JSON", type="json")
-    if upload_file:
-        data = json.load(upload_file)
-        players = [p["Player"] for p in data.get("Players",[])]
-        vehicles = [v["Vehicle"] for v in data.get("Vehicles",[])]
-        vehicle_groups = {g["Vehicle"]: g["Players"].split(", ") for g in data.get("VehicleGroups",[])}
-        history = data.get("History",[])
-        usage = {}
-        for record in history:
-            for p in record.get("players_present",[]):
-                if p not in usage:
-                    usage[p] = {"used":0,"present":0}
-                usage[p]["present"] +=1
-            for v in record.get("selected_vehicles",[]):
-                if v not in usage:
-                    usage[v] = {"used":0,"present":0}
-                usage[v]["used"] +=1
-        st.sidebar.success("✅ Data restored from backup JSON")
-    if st.sidebar.button("🗑 Reset Google Sheet"):
-        reset_google_sheet()
-    if st.sidebar.button("🔄 Load Data from Google Sheet"):
-        players, vehicles, vehicle_groups, history, usage = load_from_google_sheet()
-
-# -----------------------------
-# Players, Vehicles, Groups, Daily Match Selection, Usage, Records
-# -----------------------------
-# Players Superset
+# --- Players Superset ---
 st.header("1️⃣ Players Superset")
 if st.session_state.admin_logged_in:
-    new_player = st.text_input("Add new player:")
-    if st.button("Add Player"):
-        if new_player and new_player not in players:
-            players.append(new_player)
-            st.success(f"✅ Added player: {new_player}")
-        elif new_player in players:
-            st.warning("⚠️ Player already exists")
-        else:
-            st.warning("Enter a valid name")
-    if players:
-        remove_player = st.selectbox("Remove a player:", ["None"] + players)
-        if remove_player != "None" and st.button("Remove Player"):
-            players.remove(remove_player)
-            if remove_player in vehicles:
-                vehicles.remove(remove_player)
-            st.success(f"🗑️ Removed player: {remove_player}")
-st.write("**Current Players:**", ", ".join(players))
+    new_players = st.text_area("Add new players (comma-separated):")
+    if st.button("Add Players"):
+        for np in [p.strip() for p in new_players.split(",") if p.strip()]:
+            if np not in st.session_state.players:
+                st.session_state.players.append(np)
+    remove_player = st.selectbox("Remove a player:", ["None"] + st.session_state.players)
+    if remove_player != "None" and st.button("Remove Player"):
+        st.session_state.players.remove(remove_player)
+st.write("**Current Players:**", ", ".join(st.session_state.players))
 
-# Vehicle Set
+# --- Vehicle Set ---
 st.header("2️⃣ Vehicle Set (subset of players)")
 if st.session_state.admin_logged_in:
-    new_vehicle = st.text_input("Add vehicle owner:")
-    if st.button("Add Vehicle"):
-        if new_vehicle and new_vehicle in players and new_vehicle not in vehicles:
-            vehicles.append(new_vehicle)
-            st.success(f"✅ Added vehicle owner: {new_vehicle}")
-        elif new_vehicle not in players:
-            st.warning("⚠️ Player must exist in superset")
-        elif new_vehicle in vehicles:
-            st.warning("⚠️ Already a vehicle owner")
-    if vehicles:
-        remove_vehicle = st.selectbox("Remove vehicle owner:", ["None"] + vehicles)
-        if remove_vehicle != "None" and st.button("Remove Vehicle"):
-            vehicles.remove(remove_vehicle)
-            st.success(f"🗑️ Removed vehicle owner: {remove_vehicle}")
-st.write("**Current Vehicle Owners:**", ", ".join(vehicles))
+    new_vehicles = st.text_area("Add vehicle owners (comma-separated from players):")
+    if st.button("Add Vehicles"):
+        for nv in [v.strip() for v in new_vehicles.split(",") if v.strip()]:
+            if nv in st.session_state.players and nv not in st.session_state.vehicles:
+                st.session_state.vehicles.append(nv)
+    remove_vehicle = st.selectbox("Remove vehicle owner:", ["None"] + st.session_state.vehicles)
+    if remove_vehicle != "None" and st.button("Remove Vehicle"):
+        st.session_state.vehicles.remove(remove_vehicle)
+st.write("**Current Vehicle Owners:**", ", ".join(st.session_state.vehicles))
 
-# Vehicle Groups
+# --- Vehicle Groups ---
 st.header("3️⃣ Vehicle Groups")
 if st.session_state.admin_logged_in:
-    vg_vehicle = st.selectbox("Select vehicle to assign group", [""] + vehicles)
-    vg_members = st.multiselect("Select players sharing this vehicle", players)
+    vg_vehicle = st.selectbox("Select vehicle to assign group", [""] + st.session_state.vehicles)
+    vg_members = st.multiselect("Select players sharing this vehicle", st.session_state.players)
     if st.button("Add/Update Vehicle Group"):
         if vg_vehicle:
-            vehicle_groups[vg_vehicle] = vg_members
-            st.success(f"✅ Group updated for {vg_vehicle}")
+            st.session_state.vehicle_groups[vg_vehicle] = vg_members
 st.write("**Current Vehicle Groups:**")
-if vehicle_groups:
-    for v, members in vehicle_groups.items():
+if st.session_state.vehicle_groups:
+    for v, members in st.session_state.vehicle_groups.items():
         st.write(f"{v}: {', '.join(members)}")
 else:
     st.write("No vehicle groups defined.")
 
-# Daily Match Selection
+# --- Daily Match Selection ---
 st.header("4️⃣ Daily Match Selection")
 if st.session_state.admin_logged_in:
     game_date = st.date_input("Select date:", value=date.today())
     ground_name = st.text_input("Ground name:")
-    players_today = st.multiselect("Select players present today:", players)
-    num_needed = st.number_input("Number of vehicles needed:", 1, len(vehicles) if vehicles else 1, 1)
+    players_today = st.multiselect("Select players present today:", st.session_state.players)
+    num_needed = st.number_input("Number of vehicles needed:", 1, len(st.session_state.vehicles) if st.session_state.vehicles else 1, 1)
     selection_mode = st.radio("Vehicle Selection Mode:", ["Auto-Select", "Manual-Select"], key="mode")
     
     if selection_mode == "Manual-Select":
-        manual_selected = st.multiselect(
-            "Select vehicles manually:",
-            options=vehicles,
-            default=[],
-            help=f"Select exactly {num_needed} vehicles"
-        )
+        manual_selected = st.multiselect("Select vehicles manually:", st.session_state.vehicles, [])
     else:
         manual_selected = []
 
     if st.button("Select Vehicles"):
-        eligible = [v for v in players_today if v in vehicles]
+        eligible = [v for v in players_today if v in st.session_state.vehicles]
 
         if selection_mode=="Auto-Select":
-            selected = select_vehicles_auto(vehicles, players_today, num_needed, usage, vehicle_groups)
+            selected = select_vehicles_auto(st.session_state.vehicles, players_today, num_needed, st.session_state.usage, st.session_state.vehicle_groups)
         else:
             if len(manual_selected) != num_needed:
                 st.warning(f"⚠️ Please select exactly {num_needed} vehicles")
                 selected = []
             else:
                 selected = manual_selected
-                update_usage(selected, eligible, usage)
+                update_usage(selected, eligible, st.session_state.usage)
 
         if selected:
             st.success(f"✅ Vehicles selected: {', '.join(selected)}")
             msg = generate_message(game_date, ground_name, players_today, selected)
             st.subheader("📋 Copy-Ready Message")
             st.text_area("Message:", msg, height=200)
-            record = {
-                "date": str(game_date),
-                "ground": ground_name,
-                "players_present": players_today,
-                "selected_vehicles": selected,
-                "message": msg
-            }
-            history.append(record)
-else:
-    st.info("🔒 Daily player/vehicle selection is admin-only.")
+            st.session_state.history.append({"date": str(game_date), "ground": ground_name, "players_present": players_today, "selected_vehicles": selected, "message": msg})
 
-# Vehicle Usage Table & Chart
+# --- Usage Table & Chart ---
 st.header("5️⃣ Vehicle Usage")
-if usage:
-    df_usage = pd.DataFrame([
-        {"Player": k, "Used": v["used"], "Present": v["present"], 
-         "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
-        for k,v in usage.items()
-    ])
+if st.session_state.usage:
+    df_usage = pd.DataFrame([{"Player": k, "Used": v["used"], "Present": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0} for k,v in st.session_state.usage.items()])
     st.table(df_usage)
     fig = px.bar(df_usage, x="Player", y="Ratio", text="Used", title="Player Vehicle Usage Fairness")
     fig.update_traces(textposition='outside')
@@ -402,10 +372,10 @@ if usage:
 else:
     st.info("No usage data yet")
 
-# Recent Match Records
+# --- Recent Match Records ---
 st.header("6️⃣ Recent Match Records")
-if history:
-    for r in reversed(history[-10:]):
+if st.session_state.history:
+    for r in reversed(st.session_state.history[-10:]):
         st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {', '.join(r['selected_vehicles'])}")
 else:
     st.info("No match records yet")
