@@ -12,6 +12,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets",
 ADMIN_USER = "admin"
 ADMIN_PASS = "admin123"
 
+# Name of the pre-created Google Sheet
 sheet_name = "Team Management Data"
 
 # ------------------ GOOGLE SHEETS ------------------
@@ -31,15 +32,8 @@ def get_gsheet_client():
         st.error("Google Sheets credentials not found in Streamlit Secrets!")
         st.stop()
 
-def ensure_worksheet(sheet_name, worksheet_name, headers):
-    """Ensure worksheet exists, create with headers if missing/empty."""
-    client = get_gsheet_client()
-    try:
-        sh = client.open(sheet_name)
-    except gspread.SpreadsheetNotFound:
-        # Create new spreadsheet
-        sh = client.create(sheet_name)
-        st.info(f"Created new spreadsheet '{sheet_name}'")
+def ensure_worksheet(ws_list, sh, worksheet_name, headers):
+    """Ensure worksheet exists, create with headers if missing or empty."""
     try:
         ws = sh.worksheet(worksheet_name)
         # Add headers if empty
@@ -48,6 +42,7 @@ def ensure_worksheet(sheet_name, worksheet_name, headers):
     except gspread.WorksheetNotFound:
         ws = sh.add_worksheet(title=worksheet_name, rows="100", cols="20")
         ws.append_row(headers)
+    ws_list[worksheet_name] = ws
     return ws
 
 def load_sheet_df(ws):
@@ -90,11 +85,20 @@ if not st.session_state.logged_in:
 # ------------------ APP ------------------
 st.title("Fair Vehicle Selector")
 
-# Load worksheets (auto-create if missing)
-players_ws = ensure_worksheet(sheet_name, "Players", headers=["Player"])
-vehicles_ws = ensure_worksheet(sheet_name, "Vehicles", headers=["Vehicle"])
-groups_ws = ensure_worksheet(sheet_name, "VehicleGroups", headers=["Vehicle","Players"])
-history_ws = ensure_worksheet(sheet_name, "History", headers=["Date","Players","Vehicles"])
+# Get Google Sheets client and open pre-created sheet
+client = get_gsheet_client()
+try:
+    sh = client.open(sheet_name)
+except gspread.SpreadsheetNotFound:
+    st.error(f"Spreadsheet '{sheet_name}' not found. Make sure it exists and is shared with the service account.")
+    st.stop()
+
+# Ensure worksheets exist
+worksheets = {}
+players_ws = ensure_worksheet(worksheets, sh, "Players", headers=["Player"])
+vehicles_ws = ensure_worksheet(worksheets, sh, "Vehicles", headers=["Vehicle"])
+groups_ws = ensure_worksheet(worksheets, sh, "VehicleGroups", headers=["Vehicle","Players"])
+history_ws = ensure_worksheet(worksheets, sh, "History", headers=["Date","Players","Vehicles"])
 
 # Load dataframes
 players_df = load_sheet_df(players_ws)
