@@ -35,13 +35,18 @@ def get_gsheet_client():
         st.warning(f"Failed to authorize Google Sheets: {e}")
         return None
 
-@st.cache_data(ttl=600)
-def load_sheet_data(client):
+@st.cache_data(ttl=300)
+def load_sheet_data_cached():
+    client = get_gsheet_client()
+    if not client:
+        return None, None, None, None, [], [], {}, [], {}
+    # Open or create spreadsheet
     try:
         sh = client.open(SHEET_NAME)
     except gspread.SpreadsheetNotFound:
         sh = client.create(SHEET_NAME)
 
+    # Get or create worksheets
     def get_or_create_ws(name, headers):
         try:
             ws = sh.worksheet(name)
@@ -59,6 +64,8 @@ def load_sheet_data(client):
     vehicles = [r["Vehicle"] for r in ws_vehicles.get_all_records()]
     vehicle_groups = {r["Vehicle"]: r["Players"].split(", ") for r in ws_groups.get_all_records()}
     history_records = ws_history.get_all_records()
+
+    # Calculate usage
     usage = {}
     for record in history_records:
         for p in record.get("Players","").split(", "):
@@ -69,11 +76,10 @@ def load_sheet_data(client):
             if v not in usage:
                 usage[v] = {"used":0,"present":0}
             usage[v]["used"] +=1
+
     return ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history_records, usage
 
-# -----------------------------
-# Incremental Update Functions
-# -----------------------------
+# Incremental updates
 def append_history(ws_history, record):
     row = [
         record.get("date",""),
@@ -90,7 +96,7 @@ def undo_last_history(ws_history):
         ws_history.delete_row(len(all_rows))
 
 def add_player(ws_players, player, players_list):
-    if player and player not in players_list:
+    if player not in players_list:
         ws_players.append_row([player])
         players_list.append(player)
 
@@ -103,7 +109,7 @@ def remove_player(ws_players, player, players_list):
             break
 
 def add_vehicle(ws_vehicles, vehicle, vehicles_list):
-    if vehicle and vehicle not in vehicles_list:
+    if vehicle not in vehicles_list:
         ws_vehicles.append_row([vehicle])
         vehicles_list.append(vehicle)
 
@@ -190,26 +196,22 @@ if not st.session_state.admin_logged_in:
             st.error("❌ Incorrect username or password")
 
 # -----------------------------
-# Streamlit Page Config
+# Streamlit UI
 # -----------------------------
 st.set_page_config(page_title="Fair Vehicle Selector", page_icon="🚗", layout="centered")
 st.title("🚗 Fair Vehicle Selector")
 st.caption("Attendance-aware, fair vehicle distribution with admin control and vehicle grouping")
 
-client = get_gsheet_client()
-if client:
-    ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history, usage = load_sheet_data(client)
-else:
-    st.warning("⚠️ Google Sheets not available. Admin operations disabled.")
-    players, vehicles, vehicle_groups, history, usage = [], [], {}, [], {}
+# Load cached sheet data
+ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history, usage = load_sheet_data_cached()
 
 # -----------------------------
 # Sidebar Admin Controls
 # -----------------------------
-if st.session_state.admin_logged_in and client:
+if st.session_state.admin_logged_in:
     st.sidebar.header("⚙️ Admin Controls")
     if st.sidebar.button("🧹 Reset All Data"):
-        # Backup
+        # Automatic backup
         backup_data = {
             "Players":[{"Player":p} for p in players],
             "Vehicles":[{"Vehicle":v} for v in vehicles],
@@ -225,12 +227,10 @@ if st.session_state.admin_logged_in and client:
         reset_all_data(ws_players, ws_vehicles, ws_groups, ws_history)
         st.sidebar.success("✅ All data reset")
         st.experimental_rerun()
-
     if st.sidebar.button("↩ Undo Last Entry"):
         undo_last_history(ws_history)
         st.sidebar.success("✅ Last entry undone")
         st.experimental_rerun()
-
     st.sidebar.header("📂 Backup")
     if st.sidebar.button("📥 Download JSON Backup"):
         data = {
@@ -240,7 +240,6 @@ if st.session_state.admin_logged_in and client:
             "History":history
         }
         st.sidebar.download_button("Download JSON Backup", json.dumps(data, indent=4), "backup.json", "application/json")
-
     upload_file = st.sidebar.file_uploader("Upload Backup JSON", type="json")
     if upload_file:
         data = json.load(upload_file)
