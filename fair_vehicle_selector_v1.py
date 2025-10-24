@@ -35,40 +35,29 @@ def get_gsheet_client():
         st.warning(f"Failed to authorize Google Sheets: {e}")
         return None
 
-def open_or_create_sheet(client):
+@st.cache_data(ttl=600)
+def load_sheet_data(client):
     try:
-        existing_sheets = [s['name'] for s in client.list_spreadsheet_files()]
-        if SHEET_NAME in existing_sheets:
-            sh = client.open(SHEET_NAME)
-        else:
-            sh = client.create(SHEET_NAME)
-        return sh
-    except Exception as e:
-        st.error(f"Error opening or creating sheet: {e}")
-        return None
+        sh = client.open(SHEET_NAME)
+    except gspread.SpreadsheetNotFound:
+        sh = client.create(SHEET_NAME)
 
-def get_or_create_ws(sh, name, headers):
-    try:
-        ws = sh.worksheet(name)
-    except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(name, rows=100, cols=20)
-        ws.update([headers])
-    return ws
+    def get_or_create_ws(name, headers):
+        try:
+            ws = sh.worksheet(name)
+        except gspread.WorksheetNotFound:
+            ws = sh.add_worksheet(name, rows=100, cols=20)
+            ws.update([headers])
+        return ws
 
-@st.cache_data(ttl=3600)
-def load_players_vehicles(client):
-    sh = open_or_create_sheet(client)
-    if not sh:
-        return [], []
-    ws_players = get_or_create_ws(sh, "Players", ["Player"])
-    ws_vehicles = get_or_create_ws(sh, "Vehicles", ["Vehicle"])
+    ws_players = get_or_create_ws("Players", ["Player"])
+    ws_vehicles = get_or_create_ws("Vehicles", ["Vehicle"])
+    ws_groups = get_or_create_ws("VehicleGroups", ["Vehicle", "Players"])
+    ws_history = get_or_create_ws("History", ["Date","Ground","Players","Vehicles","Message"])
+
     players = [r["Player"] for r in ws_players.get_all_records()]
     vehicles = [r["Vehicle"] for r in ws_vehicles.get_all_records()]
-    return players, vehicles, ws_players, ws_vehicles, sh
-
-@st.cache_data(ttl=600)
-def load_daily_players(sh):
-    ws_history = get_or_create_ws(sh, "History", ["Date","Ground","Players","Vehicles","Message"])
+    vehicle_groups = {r["Vehicle"]: r["Players"].split(", ") for r in ws_groups.get_all_records()}
     history_records = ws_history.get_all_records()
     usage = {}
     for record in history_records:
@@ -80,12 +69,10 @@ def load_daily_players(sh):
             if v not in usage:
                 usage[v] = {"used":0,"present":0}
             usage[v]["used"] +=1
-    ws_groups = get_or_create_ws(sh, "VehicleGroups", ["Vehicle", "Players"])
-    vehicle_groups = {r["Vehicle"]: r["Players"].split(", ") for r in ws_groups.get_all_records()}
-    return history_records, usage, vehicle_groups, ws_groups, ws_history
+    return ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history_records, usage
 
 # -----------------------------
-# Incremental updates
+# Incremental Update Functions
 # -----------------------------
 def append_history(ws_history, record):
     row = [
@@ -103,7 +90,7 @@ def undo_last_history(ws_history):
         ws_history.delete_row(len(all_rows))
 
 def add_player(ws_players, player, players_list):
-    if player not in players_list:
+    if player and player not in players_list:
         ws_players.append_row([player])
         players_list.append(player)
 
@@ -116,7 +103,7 @@ def remove_player(ws_players, player, players_list):
             break
 
 def add_vehicle(ws_vehicles, vehicle, vehicles_list):
-    if vehicle not in vehicles_list:
+    if vehicle and vehicle not in vehicles_list:
         ws_vehicles.append_row([vehicle])
         vehicles_list.append(vehicle)
 
@@ -203,7 +190,7 @@ if not st.session_state.admin_logged_in:
             st.error("❌ Incorrect username or password")
 
 # -----------------------------
-# Streamlit UI
+# Streamlit Page Config
 # -----------------------------
 st.set_page_config(page_title="Fair Vehicle Selector", page_icon="🚗", layout="centered")
 st.title("🚗 Fair Vehicle Selector")
@@ -211,8 +198,7 @@ st.caption("Attendance-aware, fair vehicle distribution with admin control and v
 
 client = get_gsheet_client()
 if client:
-    players, vehicles, ws_players, ws_vehicles, sh = load_players_vehicles(client)
-    history, usage, vehicle_groups, ws_groups, ws_history = load_daily_players(sh)
+    ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history, usage = load_sheet_data(client)
 else:
     st.warning("⚠️ Google Sheets not available. Admin operations disabled.")
     players, vehicles, vehicle_groups, history, usage = [], [], {}, [], {}
@@ -223,7 +209,7 @@ else:
 if st.session_state.admin_logged_in and client:
     st.sidebar.header("⚙️ Admin Controls")
     if st.sidebar.button("🧹 Reset All Data"):
-        # Prepare backup
+        # Backup
         backup_data = {
             "Players":[{"Player":p} for p in players],
             "Vehicles":[{"Vehicle":v} for v in vehicles],
@@ -236,14 +222,15 @@ if st.session_state.admin_logged_in and client:
             file_name=f"backup_before_reset_{date.today()}.json",
             mime="application/json"
         )
-        # Clear all sheets
         reset_all_data(ws_players, ws_vehicles, ws_groups, ws_history)
         st.sidebar.success("✅ All data reset")
         st.experimental_rerun()
+
     if st.sidebar.button("↩ Undo Last Entry"):
         undo_last_history(ws_history)
         st.sidebar.success("✅ Last entry undone")
         st.experimental_rerun()
+
     st.sidebar.header("📂 Backup")
     if st.sidebar.button("📥 Download JSON Backup"):
         data = {
@@ -253,6 +240,7 @@ if st.session_state.admin_logged_in and client:
             "History":history
         }
         st.sidebar.download_button("Download JSON Backup", json.dumps(data, indent=4), "backup.json", "application/json")
+
     upload_file = st.sidebar.file_uploader("Upload Backup JSON", type="json")
     if upload_file:
         data = json.load(upload_file)
@@ -270,7 +258,7 @@ if st.session_state.admin_logged_in and client:
         st.experimental_rerun()
 
 # -----------------------------
-# Main UI: Players, Vehicles, Groups, Daily Match Selection
+# Main UI Sections
 # -----------------------------
 # 1️⃣ Players Superset
 st.header("1️⃣ Players Superset")
