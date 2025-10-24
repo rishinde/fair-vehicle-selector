@@ -1,25 +1,24 @@
-# fair_vehicle_selector_stable.py
+# fair_vehicle_selector_v1.py
 import streamlit as st
 import json
 from datetime import date
 import pandas as pd
 import plotly.express as px
 
-# Google Sheets integration (optional)
+# Optional Google Sheets integration
 try:
     import gspread
     from google.oauth2.service_account import Credentials
     GOOGLE_SHEETS_AVAILABLE = True
-except ImportError:
+except Exception:
     GOOGLE_SHEETS_AVAILABLE = False
 
-# Google scopes and sheet name
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets",
           "https://www.googleapis.com/auth/drive"]
 SHEET_NAME = "Team Management Data"
 
 # -----------------------------
-# Utility: user-friendly messaging
+# Small UI helpers
 # -----------------------------
 def ui_success(msg): st.success(msg)
 def ui_info(msg): st.info(msg)
@@ -30,12 +29,12 @@ def ui_error(msg): st.error(msg)
 # Google Sheets helpers
 # -----------------------------
 def get_gsheet_client():
-    """Return authorized gspread client using st.secrets['gcp_service_account'] if present."""
+    """Return a gspread client using st.secrets['gcp_service_account'] if present."""
     if not GOOGLE_SHEETS_AVAILABLE:
-        ui_warn("gspread/google-auth not installed. Google Sheets features are disabled.")
+        ui_warn("gspread/google-auth not available in environment. Google Sheets features disabled.")
         return None
     if "gcp_service_account" not in st.secrets:
-        ui_warn("No Google Cloud service account found in Streamlit secrets. Google Sheets disabled.")
+        ui_warn("No 'gcp_service_account' found in Streamlit secrets. Google Sheets disabled.")
         return None
     try:
         sa_info = st.secrets["gcp_service_account"]
@@ -45,31 +44,27 @@ def get_gsheet_client():
         client = gspread.authorize(creds)
         return client
     except Exception as e:
-        ui_error(f"Failed to create Google Sheets client: {e}")
+        ui_error(f"Failed to authorize Google Sheets: {e}")
         return None
 
 def open_or_create_spreadsheet(client):
-    """Open existing spreadsheet by name or create it. Handles both dict and object returns."""
+    """Open the spreadsheet if present, else create it. Handles list_spreadsheet_files returning dicts or objects."""
     try:
-        # client.list_spreadsheet_files() may return list of dicts or list of objects depending on gspread version
-        sheets_meta = []
         try:
             sheets_meta = client.list_spreadsheet_files()
         except Exception:
-            # fallback to empty list
             sheets_meta = []
         existing_names = []
         for item in sheets_meta:
             if isinstance(item, dict) and "name" in item:
                 existing_names.append(item["name"])
             else:
-                # object-like (older gspread) may have title attribute
                 existing_names.append(getattr(item, "title", ""))
         if SHEET_NAME in existing_names:
             try:
                 sh = client.open(SHEET_NAME)
             except Exception as e:
-                # sometimes opening by name fails; try search by id
+                # fallback attempt
                 sh = client.open(SHEET_NAME)
         else:
             sh = client.create(SHEET_NAME)
@@ -79,16 +74,16 @@ def open_or_create_spreadsheet(client):
         return None
 
 def get_or_create_worksheet(sh, name, headers):
-    """Get or create worksheet; ensure headers exist if newly created."""
+    """Get worksheet or create with headers."""
     try:
         try:
             ws = sh.worksheet(name)
         except gspread.WorksheetNotFound:
             ws = sh.add_worksheet(title=name, rows=200, cols=20)
             ws.append_row(headers)
-        # If worksheet exists but empty, ensure headers
-        values = ws.get_all_values()
-        if not values:
+        # ensure headers exist if worksheet empty
+        vals = ws.get_all_values()
+        if not vals:
             ws.append_row(headers)
         return ws
     except Exception as e:
@@ -96,13 +91,11 @@ def get_or_create_worksheet(sh, name, headers):
         return None
 
 # -----------------------------
-# Load / initialize sheet data (no caching of worksheets)
+# Init and load sheet data (worksheets not cached)
 # -----------------------------
 def init_and_load_sheet_data():
-    """Initialize worksheets and load serializable data into session_state (players/vehicles/groups/history/usage)."""
     client = get_gsheet_client()
     if not client:
-        # no sheets available; initialize empty in-memory structures
         return None, None, None, None, [], [], {}, [], {}
 
     sh = open_or_create_spreadsheet(client)
@@ -114,61 +107,69 @@ def init_and_load_sheet_data():
     ws_groups = get_or_create_worksheet(sh, "VehicleGroups", ["Vehicle", "Players"])
     ws_history = get_or_create_worksheet(sh, "History", ["Date", "Ground", "Players", "Vehicles", "Message"])
 
-    # Read serializable data
+    # Load serializable data
     try:
         players = [r["Player"] for r in ws_players.get_all_records()] if ws_players else []
+    except Exception:
+        players = []
+    try:
         vehicles = [r["Vehicle"] for r in ws_vehicles.get_all_records()] if ws_vehicles else []
-        vehicle_groups = {}
+    except Exception:
+        vehicles = []
+    vehicle_groups = {}
+    try:
         if ws_groups:
             for r in ws_groups.get_all_records():
                 key = r.get("Vehicle", "")
                 val = r.get("Players", "")
-                # handle empty string
                 vehicle_groups[key] = [p.strip() for p in val.split(",")] if val else []
-        history = ws_history.get_all_records() if ws_history else []
+    except Exception:
+        vehicle_groups = {}
 
-        # compute usage (present/used) from history
-        usage = {}
+    try:
+        history = ws_history.get_all_records() if ws_history else []
+    except Exception:
+        history = []
+
+    # compute usage
+    usage = {}
+    try:
         for rec in history:
             players_field = rec.get("Players", "")
             vehicles_field = rec.get("Vehicles", "")
-            # players present increment
-            for p in [x.strip() for x in players_field.split(",")] if players_field else []:
-                if not p:
-                    continue
-                usage.setdefault(p, {"used": 0, "present": 0})
-                usage[p]["present"] += 1
-            # vehicles (owners) used increment
-            for v in [x.strip() for x in vehicles_field.split(",")] if vehicles_field else []:
-                if not v:
-                    continue
-                usage.setdefault(v, {"used": 0, "present": 0})
-                usage[v]["used"] += 1
+            if players_field:
+                for p in [x.strip() for x in players_field.split(",")]:
+                    if not p:
+                        continue
+                    usage.setdefault(p, {"used": 0, "present": 0})
+                    usage[p]["present"] += 1
+            if vehicles_field:
+                for v in [x.strip() for x in vehicles_field.split(",")]:
+                    if not v:
+                        continue
+                    usage.setdefault(v, {"used": 0, "present": 0})
+                    usage[v]["used"] += 1
+    except Exception:
+        usage = {}
 
-        return ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history, usage
-    except Exception as e:
-        ui_error(f"Failed to read data from worksheets: {e}")
-        return ws_players, ws_vehicles, ws_groups, ws_history, [], [], {}, [], {}
+    return ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history, usage
 
 # -----------------------------
-# Safe operations (minimal API usage)
+# Safe sheet operations
 # -----------------------------
 def safe_append_row(ws, row):
-    """Append a row (list of strings) safely with user-friendly errors."""
     if not ws:
         ui_warn("Worksheet unavailable for append.")
         return False
     try:
-        # convert all to str
-        r = ["" if x is None else str(x) for x in row]
-        ws.append_row(r)
+        row_str = ["" if x is None else str(x) for x in row]
+        ws.append_row(row_str)
         return True
     except Exception as e:
-        ui_error(f"Failed to append row to sheet '{ws.title}': {e}")
+        ui_error(f"Failed to append row to '{getattr(ws, 'title', str(ws))}': {e}")
         return False
 
 def safe_delete_last_row(ws):
-    """Delete last row if present."""
     if not ws:
         ui_warn("Worksheet unavailable for delete.")
         return False
@@ -180,32 +181,29 @@ def safe_delete_last_row(ws):
         ws.delete_row(len(vals))
         return True
     except Exception as e:
-        ui_error(f"Failed to delete last row from '{ws.title}': {e}")
+        ui_error(f"Failed to delete last row from '{getattr(ws, 'title', str(ws))}': {e}")
         return False
 
-def safe_delete_row_by_match(ws, key_col_name, key_value):
-    """Delete first row where column key_col_name equals key_value (case-sensitive)."""
+def safe_delete_row_by_column(ws, col_name, match_value):
     if not ws:
         ui_warn("Worksheet unavailable for delete.")
         return False
     try:
-        records = ws.get_all_records()
-        for idx, rec in enumerate(records, start=2):  # 1-based + header
-            if rec.get(key_col_name) == key_value:
+        recs = ws.get_all_records()
+        for idx, r in enumerate(recs, start=2):
+            if r.get(col_name) == match_value:
                 ws.delete_row(idx)
                 return True
         return False
     except Exception as e:
-        ui_error(f"Failed to delete row in '{ws.title}': {e}")
+        ui_error(f"Failed to delete row in '{getattr(ws, 'title', str(ws))}': {e}")
         return False
 
 def safe_update_group(ws_groups, vehicle, members):
-    """Replace existing group for vehicle or append if not present."""
     if not ws_groups:
         ui_warn("VehicleGroups worksheet unavailable.")
         return False
     try:
-        # delete existing row if any
         recs = ws_groups.get_all_records()
         for idx, r in enumerate(recs, start=2):
             if r.get("Vehicle") == vehicle:
@@ -218,9 +216,12 @@ def safe_update_group(ws_groups, vehicle, members):
         return False
 
 def safe_reset_all(ws_players, ws_vehicles, ws_groups, ws_history):
-    """Clear all worksheets and re-add headers (if possible)."""
-    for ws, headers in [(ws_players, ["Player"]), (ws_vehicles, ["Vehicle"]),
-                        (ws_groups, ["Vehicle", "Players"]), (ws_history, ["Date", "Ground", "Players", "Vehicles", "Message"])]:
+    for ws, headers in [
+        (ws_players, ["Player"]),
+        (ws_vehicles, ["Vehicle"]),
+        (ws_groups, ["Vehicle", "Players"]),
+        (ws_history, ["Date", "Ground", "Players", "Vehicles", "Message"])
+    ]:
         if not ws:
             continue
         try:
@@ -230,7 +231,7 @@ def safe_reset_all(ws_players, ws_vehicles, ws_groups, ws_history):
             ui_error(f"Failed to reset worksheet '{getattr(ws, 'title', str(ws))}': {e}")
 
 # -----------------------------
-# Vehicle selection logic (unchanged behavior)
+# Vehicle selection logic
 # -----------------------------
 def update_usage_counts(selected_players, eligible_players, usage):
     for p in selected_players:
@@ -253,14 +254,14 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
         pick = ordered[0]
         selected.append(pick)
         update_usage_counts([pick], eligible, usage)
-        # exclude entire group members if pick belongs to one
-        excluded = False
+        # remove group members if pick belongs to a group
+        removed = False
         for members in vehicle_groups.values():
             if pick in members:
                 eligible = [e for e in eligible if e not in members]
-                excluded = True
+                removed = True
                 break
-        if not excluded:
+        if not removed:
             eligible.remove(pick)
     return selected
 
@@ -271,29 +272,29 @@ def generate_message(game_date, ground_name, players_list, selected):
     return msg
 
 # -----------------------------
-# Streamlit UI & state init
+# Streamlit UI initialization
 # -----------------------------
-st.set_page_config(page_title="Fair Vehicle Selector (stable v1.0)", page_icon="🚗", layout="wide")
-st.title("🚗 Fair Vehicle Selector — stable v1.0")
-st.write("Attendance-aware, fair vehicle distribution with incremental Google Sheets persistence.")
+st.set_page_config(page_title="Fair Vehicle Selector (stable)", page_icon="🚗", layout="wide")
+st.title("🚗 Fair Vehicle Selector — stable")
+st.write("Attendance-aware vehicle distribution with incremental Google Sheets persistence.")
 
-# Admin login (simple)
+# Admin login simple check
 if "admin_logged_in" not in st.session_state:
     st.session_state.admin_logged_in = False
 
 if not st.session_state.admin_logged_in:
     with st.expander("🔒 Admin Login (expand to sign in)"):
-        u = st.text_input("Username", key="login_user")
-        p = st.text_input("Password", type="password", key="login_pass")
+        txt_user = st.text_input("Username", key="login_user")
+        txt_pass = st.text_input("Password", type="password", key="login_pass")
         if st.button("Login as Admin"):
-            if u == "admin" and p == "admin123":
+            if txt_user == "admin" and txt_pass == "admin123":
                 st.session_state.admin_logged_in = True
                 ui_success("Logged in as admin.")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 ui_error("Incorrect username or password.")
 
-# Initialize worksheet objects and load data once
+# Load sheets and data once into session_state
 if "ws_initialized" not in st.session_state:
     st.session_state.ws_players = None
     st.session_state.ws_vehicles = None
@@ -306,31 +307,20 @@ if "ws_initialized" not in st.session_state:
     st.session_state.usage = {}
     st.session_state.ws_initialized = False
 
-# Try to initialize once
 if not st.session_state.ws_initialized:
-    client = get_gsheet_client()
-    if client:
-        ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history, usage = init_and_load_sheet_data()
-        # store worksheets and data in session_state (worksheets stored as objects, but we didn't cache them)
-        st.session_state.ws_players = ws_players
-        st.session_state.ws_vehicles = ws_vehicles
-        st.session_state.ws_groups = ws_groups
-        st.session_state.ws_history = ws_history
-        st.session_state.players = players
-        st.session_state.vehicles = vehicles
-        st.session_state.vehicle_groups = vehicle_groups
-        st.session_state.history = history
-        st.session_state.usage = usage
-    else:
-        # No client: keep empty lists already created
-        st.session_state.players = st.session_state.players or []
-        st.session_state.vehicles = st.session_state.vehicles or []
-        st.session_state.vehicle_groups = st.session_state.vehicle_groups or {}
-        st.session_state.history = st.session_state.history or []
-        st.session_state.usage = st.session_state.usage or {}
+    ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history, usage = init_and_load_sheet_data()
+    st.session_state.ws_players = ws_players
+    st.session_state.ws_vehicles = ws_vehicles
+    st.session_state.ws_groups = ws_groups
+    st.session_state.ws_history = ws_history
+    st.session_state.players = players
+    st.session_state.vehicles = vehicles
+    st.session_state.vehicle_groups = vehicle_groups
+    st.session_state.history = history
+    st.session_state.usage = usage
     st.session_state.ws_initialized = True
 
-# aliases for readability
+# local aliases
 ws_players = st.session_state.ws_players
 ws_vehicles = st.session_state.ws_vehicles
 ws_groups = st.session_state.ws_groups
@@ -342,43 +332,37 @@ history = st.session_state.history
 usage = st.session_state.usage
 
 # -----------------------------
-# Sidebar admin controls (Reset/Undo/Backup/Upload)
+# Sidebar admin controls
 # -----------------------------
 with st.sidebar:
     st.header("⚙️ Admin Controls")
     if st.session_state.admin_logged_in:
-        # Reset All Data (download backup automatically)
         if st.button("🧹 Reset All Data"):
             if history or players or vehicles:
-                backup = {
+                backup_data = {
                     "Players": [{"Player": p} for p in players],
                     "Vehicles": [{"Vehicle": v} for v in vehicles],
                     "VehicleGroups": [{"Vehicle": k, "Players": ", ".join(v)} for k, v in vehicle_groups.items()],
                     "History": history
                 }
-                st.download_button("📥 Download Backup (before reset)", json.dumps(backup, indent=2),
+                st.download_button("📥 Download Backup (before reset)", json.dumps(backup_data, indent=2),
                                    file_name=f"backup_before_reset_{date.today()}.json",
                                    mime="application/json")
             safe_reset_all(ws_players, ws_vehicles, ws_groups, ws_history)
-            # clear session_state
             st.session_state.players = []
             st.session_state.vehicles = []
             st.session_state.vehicle_groups = {}
             st.session_state.history = []
             st.session_state.usage = {}
-            ui_success("All data reset (sheets cleared).")
-            st.experimental_rerun()
+            ui_success("All data reset.")
+            st.rerun()
 
-        # Undo last entry (history)
         if st.button("↩ Undo Last Entry"):
             ok = safe_delete_last_row(ws_history)
-            if ok:
-                # also remove last from in-memory history if present
-                if history:
-                    history.pop()
-                    st.session_state.history = history
-                ui_success("Last history entry undone (sheet + memory).")
-            st.experimental_rerun()
+            if ok and history:
+                history.pop()
+                st.session_state.history = history
+            st.rerun()
 
         st.markdown("---")
         st.header("📂 Backup / Restore")
@@ -392,11 +376,11 @@ with st.sidebar:
             st.download_button("Download data JSON", json.dumps(download_data, indent=2),
                                file_name=f"current_data_{date.today()}.json",
                                mime="application/json")
+
         uploaded = st.file_uploader("Upload Backup JSON to restore", type="json")
         if uploaded:
             try:
                 data = json.load(uploaded)
-                # Reset sheets then restore
                 safe_reset_all(ws_players, ws_vehicles, ws_groups, ws_history)
                 # restore players
                 for p in data.get("Players", []):
@@ -424,7 +408,7 @@ with st.sidebar:
                 ui_success("Backup restored to Google Sheets.")
                 # reload session data
                 st.session_state.ws_initialized = False
-                st.experimental_rerun()
+                st.rerun()
             except Exception as e:
                 ui_error(f"Failed to restore backup: {e}")
 
@@ -432,17 +416,17 @@ with st.sidebar:
         st.info("Admin-only controls. Login as admin to modify data.")
 
 # -----------------------------
-# Main UI - Players / Vehicles / Groups
+# Main UI: Players / Vehicles / Groups
 # -----------------------------
 st.header("1️⃣ Players Superset")
 if st.session_state.admin_logged_in:
-    colp1, colp2 = st.columns([3,1])
-    with colp1:
+    c1, c2 = st.columns([3,1])
+    with c1:
         new_player = st.text_input("Add new player", key="new_player_input")
-    with colp2:
+    with c2:
         if st.button("Add Player"):
             if not new_player:
-                ui_warn("Provide a valid name.")
+                ui_warn("Enter a valid name.")
             elif new_player in players:
                 ui_warn("Player already exists.")
             else:
@@ -450,8 +434,8 @@ if st.session_state.admin_logged_in:
                 if ok:
                     players.append(new_player)
                     st.session_state.players = players
-                    ui_success(f"Player '{new_player}' added.")
-                    st.experimental_rerun()
+                    ui_success(f"Added player '{new_player}'.")
+                    st.rerun()
 
     if players:
         rem = st.selectbox("Remove a player", ["None"] + players, key="remove_player_select")
@@ -459,34 +443,33 @@ if st.session_state.admin_logged_in:
             if rem == "None":
                 ui_info("Select a player to remove.")
             else:
-                ok = safe_delete_row_by_match(ws_players, "Player", rem)
+                ok = safe_delete_row_by_column(ws_players, "Player", rem)
                 if ok:
                     if rem in players:
                         players.remove(rem)
                         st.session_state.players = players
                     ui_success(f"Removed player '{rem}'.")
-                    # remove from vehicles if present
+                    # Also remove vehicle if same name
                     if rem in vehicles:
-                        # also remove from vehicles sheet
-                        safe_delete_row_by_match(ws_vehicles, "Vehicle", rem)
+                        safe_delete_row_by_column(ws_vehicles, "Vehicle", rem)
                         vehicles.remove(rem)
                         st.session_state.vehicles = vehicles
-                    st.experimental_rerun()
+                    st.rerun()
 
 st.write("**Current Players:**", ", ".join(players) if players else "No players defined.")
 
 st.markdown("---")
 st.header("2️⃣ Vehicle Set (subset of players)")
 if st.session_state.admin_logged_in:
-    colv1, colv2 = st.columns([3,1])
-    with colv1:
-        new_vehicle = st.text_input("Add vehicle owner (must be in Players list)", key="new_vehicle_input")
-    with colv2:
+    c3, c4 = st.columns([3,1])
+    with c3:
+        new_vehicle = st.text_input("Add vehicle owner (must exist in players)", key="new_vehicle_input")
+    with c4:
         if st.button("Add Vehicle"):
             if not new_vehicle:
-                ui_warn("Provide a valid name.")
+                ui_warn("Enter a valid name.")
             elif new_vehicle not in players:
-                ui_warn("Vehicle owner must be a player in superset.")
+                ui_warn("Vehicle owner must be in players list.")
             elif new_vehicle in vehicles:
                 ui_warn("Vehicle already exists.")
             else:
@@ -494,8 +477,8 @@ if st.session_state.admin_logged_in:
                 if ok:
                     vehicles.append(new_vehicle)
                     st.session_state.vehicles = vehicles
-                    ui_success(f"Vehicle owner '{new_vehicle}' added.")
-                    st.experimental_rerun()
+                    ui_success(f"Added vehicle owner '{new_vehicle}'.")
+                    st.rerun()
 
     if vehicles:
         remv = st.selectbox("Remove a vehicle owner", ["None"] + vehicles, key="remove_vehicle_select")
@@ -503,13 +486,13 @@ if st.session_state.admin_logged_in:
             if remv == "None":
                 ui_info("Select a vehicle owner to remove.")
             else:
-                ok = safe_delete_row_by_match(ws_vehicles, "Vehicle", remv)
+                ok = safe_delete_row_by_column(ws_vehicles, "Vehicle", remv)
                 if ok:
                     if remv in vehicles:
                         vehicles.remove(remv)
                         st.session_state.vehicles = vehicles
-                    ui_success(f"Vehicle owner '{remv}' removed.")
-                    st.experimental_rerun()
+                    ui_success(f"Removed vehicle owner '{remv}'.")
+                    st.rerun()
 
 st.write("**Current Vehicle Owners:**", ", ".join(vehicles) if vehicles else "No vehicle owners defined.")
 
@@ -520,14 +503,14 @@ if st.session_state.admin_logged_in:
     vg_members = st.multiselect("Select players (group) who share the same vehicle", players, key="vg_members_select")
     if st.button("Add/Update Vehicle Group"):
         if not vg_vehicle:
-            ui_warn("Select a vehicle owner first.")
+            ui_warn("Choose a vehicle owner.")
         else:
             ok = safe_update_group(ws_groups, vg_vehicle, vg_members)
             if ok:
                 vehicle_groups[vg_vehicle] = vg_members
                 st.session_state.vehicle_groups = vehicle_groups
                 ui_success(f"Group updated for '{vg_vehicle}'.")
-                st.experimental_rerun()
+                st.rerun()
 
 st.write("**Current Vehicle Groups:**")
 if vehicle_groups:
@@ -542,13 +525,12 @@ else:
 st.markdown("---")
 st.header("4️⃣ Daily Match Selection")
 if not st.session_state.admin_logged_in:
-    st.info("Daily match selection is admin-only. Login to proceed.")
+    st.info("Daily match selection is admin-only. Login as admin to proceed.")
 else:
     game_date = st.date_input("Select match date", value=date.today())
     ground_name = st.text_input("Ground name", key="ground_name")
     players_today = st.multiselect("Select players present today", players, key="players_today_multi")
 
-    # number of vehicles needed: min 1 max len(vehicles)
     max_vehicles = len(vehicles) if vehicles else 1
     num_needed = st.number_input("Number of vehicles needed", min_value=1, max_value=max_vehicles, value=1, step=1)
 
@@ -558,7 +540,6 @@ else:
         manual_selected = st.multiselect("Manual select vehicle owners", vehicles, key="manual_select_vehicles")
 
     if st.button("Select Vehicles for Match"):
-        # validation
         eligible = [v for v in players_today if v in vehicles]
         if not eligible:
             ui_warn("No eligible vehicle owners present among selected players.")
@@ -575,7 +556,6 @@ else:
             if not selected:
                 ui_warn("No vehicles selected.")
             else:
-                # emergency swap: allow admin to swap last vehicle before finalizing
                 swap_options = ["None"] + [v for v in vehicles if v not in selected]
                 swap_choice = st.selectbox("If emergency, change LAST selected vehicle to:", swap_options, key="swap_select")
                 if swap_choice and swap_choice != "None":
@@ -583,12 +563,10 @@ else:
                     selected[-1] = swap_choice
                     ui_info(f"Replaced {replaced} with {swap_choice} for this match.")
 
-                # generate message
                 message = generate_message(game_date, ground_name, players_today, selected)
                 st.subheader("📋 Copy-ready message")
                 st.text_area("Match Details (copy-paste ready)", message, height=260)
 
-                # record (append once)
                 record = {
                     "date": str(game_date),
                     "ground": ground_name,
@@ -600,14 +578,13 @@ else:
                 if ok:
                     history.append(record)
                     st.session_state.history = history
-                    # update usage counts in session
                     update_usage_counts(selected, eligible, usage)
                     st.session_state.usage = usage
                     ui_success(f"Vehicles selected and recorded: {', '.join(selected)}")
-                    st.experimental_rerun()
+                    st.rerun()
 
 # -----------------------------
-# Usage Table & Chart (read-only for guests)
+# Usage Table & Chart
 # -----------------------------
 st.markdown("---")
 st.header("6️⃣ Vehicle Usage")
@@ -615,7 +592,6 @@ if usage:
     df_usage = pd.DataFrame([{"Player": k, "Used": v["used"], "Present": v["present"],
                               "Ratio": (v["used"] / v["present"]) if v["present"] > 0 else 0.0}
                              for k, v in usage.items()])
-    # sort by ratio desc
     df_usage = df_usage.sort_values(by="Ratio", ascending=False).reset_index(drop=True)
     st.dataframe(df_usage, use_container_width=True)
     fig = px.bar(df_usage, x="Player", y="Ratio", text="Used", title="Player Vehicle Usage Fairness")
@@ -638,11 +614,9 @@ if history:
 else:
     st.info("No match records yet.")
 
-# -----------------------------
-# Footer / help
-# -----------------------------
+# Footer
 st.markdown("---")
 st.write("Notes:")
 st.write("- Admin login required to add/remove players, vehicles, groups, and to make selections.")
 st.write("- The app writes minimal rows to Google Sheets to reduce quota usage (incremental pattern).")
-st.write("- If Sheets operations fail, check service account in Streamlit secrets and Sheets API quotas/permissions.")
+st.write("- If Sheets operations fail, check the service account in Streamlit secrets and Sheets API quotas/permissions.")
