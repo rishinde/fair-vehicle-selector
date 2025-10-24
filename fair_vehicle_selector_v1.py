@@ -208,6 +208,20 @@ else:
 if st.session_state.admin_logged_in and client:
     st.sidebar.header("⚙️ Admin Controls")
     if st.sidebar.button("🧹 Reset All Data"):
+        # Prepare backup
+        backup_data = {
+            "Players":[{"Player":p} for p in players],
+            "Vehicles":[{"Vehicle":v} for v in vehicles],
+            "VehicleGroups":[{"Vehicle":k,"Players":", ".join(v)} for k,v in vehicle_groups.items()],
+            "History":history
+        }
+        st.sidebar.download_button(
+            "📥 Download Backup Before Reset",
+            json.dumps(backup_data, indent=4),
+            file_name=f"backup_before_reset_{date.today()}.json",
+            mime="application/json"
+        )
+        # Clear all sheets
         reset_all_data(ws_players, ws_vehicles, ws_groups, ws_history)
         st.sidebar.success("✅ All data reset")
         st.experimental_rerun()
