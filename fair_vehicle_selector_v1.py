@@ -173,24 +173,55 @@ else:
 # -----------------------------
 if st.session_state.admin_logged_in and client:
     st.sidebar.header("⚙️ Admin Controls")
-    
-    # Reset all
-    if st.sidebar.button("🧹 Reset All Data"):
-        backup_data = {
-            "Players":[{"Player":p} for p in players],
-            "Vehicles":[{"Vehicle":v} for v in vehicles],
-            "VehicleGroups":[{"Vehicle":k,"Players":", ".join(v)} for k,v in vehicle_groups.items()],
-            "History":history
-        }
-        st.sidebar.download_button(
-            "📥 Download Backup Before Reset",
-            json.dumps(backup_data, indent=4),
-            file_name=f"backup_before_reset_{date.today()}.json",
-            mime="application/json"
-        )
-        # Clear in-memory data
-        players, vehicles, vehicle_groups, history, usage = [], [], {}, [], {}
-        st.sidebar.success("✅ All data reset")
+
+    # -----------------------------
+# Sidebar Admin Controls
+# -----------------------------
+if st.session_state.admin_logged_in and client:
+    st.sidebar.header("⚙️ Admin Controls")
+
+    # Initialize backup flag
+    if "backup_downloaded" not in st.session_state:
+        st.session_state.backup_downloaded = False
+
+    # Prepare backup data
+    backup_data = {
+        "Players":[{"Player":p} for p in players],
+        "Vehicles":[{"Vehicle":v} for v in vehicles],
+        "VehicleGroups":[{"Vehicle":k,"Players":", ".join(v)} for k,v in vehicle_groups.items()],
+        "History":history
+    }
+
+    # Download backup button
+    if st.sidebar.download_button(
+        "📥 Download Backup Before Reset",
+        json.dumps(backup_data, indent=4),
+        file_name=f"backup_before_reset_{date.today()}.json",
+        mime="application/json"
+    ):
+        st.session_state.backup_downloaded = True
+        st.sidebar.success("✅ Backup downloaded. You can now reset data.")
+
+    # Reset button: disabled until backup is downloaded
+    reset_disabled = not st.session_state.backup_downloaded
+    if st.sidebar.button("🧹 Reset All Data", disabled=reset_disabled):
+        try:
+            # Clear in-memory data
+            players, vehicles, vehicle_groups, history, usage = [], [], {}, [], {}
+            # Clear Google Sheets
+            ws_players.clear()
+            ws_players.append_row(["Player"])
+            ws_vehicles.clear()
+            ws_vehicles.append_row(["Vehicle"])
+            ws_groups.clear()
+            ws_groups.append_row(["Vehicle","Players"])
+            ws_history.clear()
+            ws_history.append_row(["date","ground","players_present","selected_vehicles","message"])
+            st.sidebar.success("✅ All data reset")
+            # Reset backup flag
+            st.session_state.backup_downloaded = False
+        except Exception as e:
+            st.sidebar.error(f"❌ Failed to reset Google Sheet: {e}")
 
     # Undo last entry
     if st.sidebar.button("↩ Undo Last Entry"):
