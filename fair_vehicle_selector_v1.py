@@ -367,9 +367,9 @@ if st.session_state.admin_logged_in:
     if st.button("💾 Save Match History to Google Sheet") and client:
         ws_history.clear()
         ws_history.append_row(["date","ground","players_present","selected_vehicles","message"])
-        players_str = ", ".join(r["players_present"]) if isinstance(r["players_present"], list) else r["players_present"]
-        vehicles_str = ", ".join(r["selected_vehicles"]) if isinstance(r["selected_vehicles"], list) else r["selected_vehicles"]
         for r in history:
+            players_str = ", ".join(r["players_present"]) if isinstance(r["players_present"], list) else r["players_present"]
+            vehicles_str = ", ".join(r["selected_vehicles"]) if isinstance(r["selected_vehicles"], list) else r["selected_vehicles"]
             ws_history.append_row([
                 r["date"],
                 r["ground"],
