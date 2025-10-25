@@ -250,12 +250,6 @@ if st.session_state.admin_logged_in and client:
         vehicles = [v["Vehicle"] for v in data.get("Vehicles",[])]
         vehicle_groups = {g["Vehicle"]: g["Players"].split(", ") for g in data.get("VehicleGroups",[])}
         history = data.get("History",[])
-
-        for r in history:
-            if isinstance(r.get("players_present"), str):
-                r["players_present"] = json.loads(r["players_present"])
-            if isinstance(r.get("selected_vehicles"), str):
-                r["selected_vehicles"] = json.loads(r["selected_vehicles"])
         st.sidebar.success("✅ Data restored from backup")
 
 # -----------------------------
@@ -373,12 +367,14 @@ if st.session_state.admin_logged_in:
     if st.button("💾 Save Match History to Google Sheet") and client:
         ws_history.clear()
         ws_history.append_row(["date","ground","players_present","selected_vehicles","message"])
+        players_str = ", ".join(r["players_present"]) if isinstance(r["players_present"], list) else r["players_present"]
+        vehicles_str = ", ".join(r["selected_vehicles"]) if isinstance(r["selected_vehicles"], list) else r["selected_vehicles"]
         for r in history:
             ws_history.append_row([
                 r["date"],
                 r["ground"],
-                ", ".join(r["players_present"]),
-                ", ".join(r["selected_vehicles"]),
+                players_str,
+                vehicles_str,
                 r["message"]
             ])
         st.success("✅ Match history saved to Google Sheet")
