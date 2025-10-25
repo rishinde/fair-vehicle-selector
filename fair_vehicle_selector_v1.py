@@ -390,14 +390,6 @@ if history:
 else:
     st.info("No match records yet")
 
-# 7️⃣ Recent Match Records
-st.header("7️⃣ Recent Match Records")
-if history:
-    for r in reversed(history[-10:]):
-        st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {r['selected_vehicles']}")
-else:
-    st.info("No match records yet")
-
 # -----------------------------
 # CSV Download for History (everyone)
 # -----------------------------
