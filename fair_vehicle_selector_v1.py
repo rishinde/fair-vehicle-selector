@@ -229,19 +229,6 @@ if st.session_state.admin_logged_in and client:
             history.pop()
             st.sidebar.success("✅ Last entry removed from memory")
 
-    # Backup
-    st.sidebar.header("📂 Backup")
-    st.sidebar.download_button("📥 Download JSON Backup", 
-        json.dumps({
-            "Players":[{"Player":p} for p in players],
-            "Vehicles":[{"Vehicle":v} for v in vehicles],
-            "VehicleGroups":[{"Vehicle":k,"Players":", ".join(v)} for k,v in vehicle_groups.items()],
-            "History":history
-        }, indent=4),
-        file_name="backup.json",
-        mime="application/json"
-    )
-
     # Upload
     upload_file = st.sidebar.file_uploader("Upload Backup JSON", type="json")
     if upload_file:
