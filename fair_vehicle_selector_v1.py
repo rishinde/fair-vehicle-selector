@@ -62,7 +62,7 @@ def load_gsheet_data(client):
     ws_players = get_or_create_ws("Players", ["Player"])
     ws_vehicles = get_or_create_ws("Vehicles", ["Vehicle"])
     ws_groups = get_or_create_ws("VehicleGroups", ["Vehicle", "Players"])
-    ws_history = get_or_create_ws("History", ["Date","Ground","Players","Vehicles","Message"])
+    ws_history = get_or_create_ws("History", ["date","ground","players_present","selected_vehicles","message"])
 
     # Read all data once
     players = [r["Player"] for r in ws_players.get_all_records()]
@@ -77,11 +77,11 @@ def load_gsheet_data(client):
     # Compute usage
     usage = {}
     for record in history_records:
-        for p in record.get("Players","").split(", "):
+        for p in record.get("players_present","").split(", "):
             if p not in usage:
                 usage[p] = {"used":0,"present":0}
             usage[p]["present"] +=1
-        for v in record.get("Vehicles","").split(", "):
+        for v in record.get("selected_vehicles","").split(", "):
             if v not in usage:
                 usage[v] = {"used":0,"present":0}
             usage[v]["used"] +=1
@@ -335,7 +335,7 @@ if st.session_state.admin_logged_in:
 
     if st.button("💾 Save Match History to Google Sheet") and client:
         ws_history.clear()
-        ws_history.append_row(["Date","Ground","Players","Vehicles","Message"])
+        ws_history.append_row(["date","ground","players_present","selected_vehicles","message"])
         for r in history:
             ws_history.append_row([
                 r["date"],
@@ -367,6 +367,6 @@ else:
 st.header("7️⃣ Recent Match Records")
 if history:
     for r in reversed(history[-10:]):
-        st.write(f"📅 {r['Date']} — {r['Ground']} — 🚗 {r['Vehicles']}")
+        st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {', '.join(r['selected_vehicles'])}")
 else:
     st.info("No match records yet")
