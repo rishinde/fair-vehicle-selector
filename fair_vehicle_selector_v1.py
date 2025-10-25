@@ -367,6 +367,11 @@ else:
 st.header("7️⃣ Recent Match Records")
 if history:
     for r in reversed(history[-10:]):
-        st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {r['selected_vehicles']}")
+        vehicles_value = r["selected_vehicles"]
+        if isinstance(vehicles_value, list):
+            display_vehicles = ", ".join(vehicles_value)
+        else:
+            display_vehicles = vehicles_value
+        st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {display_vehicles}")
 else:
     st.info("No match records yet")
