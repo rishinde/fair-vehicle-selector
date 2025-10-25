@@ -3,6 +3,7 @@ import json
 from datetime import date
 import pandas as pd
 import plotly.express as px
+import time
 
 # Optional Google Sheets integration
 try:
@@ -39,6 +40,7 @@ def get_gsheet_client():
 # Google Sheets Data Loader
 # -----------------------------
 def load_gsheet_data(client):
+    """Load all data once per session, throttle reads to reduce quota hits"""
     try:
         existing_sheets = [s['name'] for s in client.list_spreadsheet_files()]
         sh = client.open(SHEET_NAME) if SHEET_NAME in existing_sheets else client.create(SHEET_NAME)
@@ -54,16 +56,25 @@ def load_gsheet_data(client):
             ws.append_row(headers)
         return ws
 
+    # Throttle reads
+    time.sleep(0.5)
+
     ws_players = get_or_create_ws("Players", ["Player"])
     ws_vehicles = get_or_create_ws("Vehicles", ["Vehicle"])
     ws_groups = get_or_create_ws("VehicleGroups", ["Vehicle", "Players"])
     ws_history = get_or_create_ws("History", ["Date","Ground","Players","Vehicles","Message"])
 
+    # Read all data once
     players = [r["Player"] for r in ws_players.get_all_records()]
+    time.sleep(0.2)
     vehicles = [r["Vehicle"] for r in ws_vehicles.get_all_records()]
+    time.sleep(0.2)
     vehicle_groups = {r["Vehicle"]: r["Players"].split(", ") for r in ws_groups.get_all_records()}
+    time.sleep(0.2)
     history_records = ws_history.get_all_records()
+    time.sleep(0.2)
 
+    # Compute usage
     usage = {}
     for record in history_records:
         for p in record.get("Players","").split(", "):
@@ -78,64 +89,7 @@ def load_gsheet_data(client):
     return ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history_records, usage
 
 # -----------------------------
-# Incremental Updates
-# -----------------------------
-def append_history(ws_history, record):
-    row = [
-        record.get("date",""),
-        record.get("ground",""),
-        ", ".join(record.get("players_present",[])),
-        ", ".join(record.get("selected_vehicles",[])),
-        record.get("message","")
-    ]
-    ws_history.append_row(row)
-
-def undo_last_history(ws_history):
-    all_rows = ws_history.get_all_values()
-    if len(all_rows) > 1:
-        ws_history.delete_rows(len(all_rows))
-
-def add_player(ws_players, player, players_list):
-    if player not in players_list:
-        ws_players.append_row([player])
-        players_list.append(player)
-
-def remove_player(ws_players, player, players_list):
-    all_records = ws_players.get_all_records()
-    for idx, r in enumerate(all_records, start=2):
-        if r["Player"]==player:
-            ws_players.delete_rows(idx)
-            players_list.remove(player)
-            break
-
-def add_vehicle(ws_vehicles, vehicle, vehicles_list):
-    if vehicle not in vehicles_list:
-        ws_vehicles.append_row([vehicle])
-        vehicles_list.append(vehicle)
-
-def remove_vehicle(ws_vehicles, vehicle, vehicles_list):
-    all_records = ws_vehicles.get_all_records()
-    for idx, r in enumerate(all_records, start=2):
-        if r["Vehicle"]==vehicle:
-            ws_vehicles.delete_rows(idx)
-            vehicles_list.remove(vehicle)
-            break
-
-def update_vehicle_group(ws_groups, vehicle, members):
-    all_records = ws_groups.get_all_records()
-    for idx, r in enumerate(all_records, start=2):
-        if r["Vehicle"]==vehicle:
-            ws_groups.delete_rows(idx)
-            break
-    ws_groups.append_row([vehicle, ", ".join(members)])
-
-def reset_all_data(ws_players, ws_vehicles, ws_groups, ws_history):
-    for ws in [ws_players, ws_vehicles, ws_groups, ws_history]:
-        ws.clear()
-        ws.append_row(ws.get_all_values()[0]) if ws.get_all_values() else None
-
-# -----------------------------
-# Vehicle Selection Logic
+# Incremental Updates (in-memory only)
 # -----------------------------
 def update_usage(selected_players, eligible_players, usage):
     for p in selected_players:
@@ -203,8 +157,13 @@ st.title("🚗 Fair Vehicle Selector")
 st.caption("Attendance-aware, fair vehicle distribution with admin control and vehicle grouping")
 
 client = get_gsheet_client()
+
+# Load all data once per session
+if client and "gsheet_data" not in st.session_state:
+    st.session_state.gsheet_data = load_gsheet_data(client)
+
 if client:
-    ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history, usage = load_gsheet_data(client)
+    ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history, usage = st.session_state.gsheet_data
 else:
     st.warning("⚠️ Google Sheets not available. Admin operations disabled.")
     players, vehicles, vehicle_groups, history, usage = [], [], {}, [], {}
@@ -214,6 +173,8 @@ else:
 # -----------------------------
 if st.session_state.admin_logged_in and client:
     st.sidebar.header("⚙️ Admin Controls")
+    
+    # Reset all
     if st.sidebar.button("🧹 Reset All Data"):
         backup_data = {
             "Players":[{"Player":p} for p in players],
@@ -227,40 +188,41 @@ if st.session_state.admin_logged_in and client:
             file_name=f"backup_before_reset_{date.today()}.json",
             mime="application/json"
         )
-        reset_all_data(ws_players, ws_vehicles, ws_groups, ws_history)
+        # Clear in-memory data
+        players, vehicles, vehicle_groups, history, usage = [], [], {}, [], {}
         st.sidebar.success("✅ All data reset")
 
+    # Undo last entry
     if st.sidebar.button("↩ Undo Last Entry"):
-        undo_last_history(ws_history)
-        st.sidebar.success("✅ Last entry undone")
+        if history:
+            history.pop()
+            st.sidebar.success("✅ Last entry removed from memory")
 
+    # Backup
     st.sidebar.header("📂 Backup")
-    if st.sidebar.button("📥 Download JSON Backup"):
-        data = {
+    st.sidebar.download_button("📥 Download JSON Backup", 
+        json.dumps({
             "Players":[{"Player":p} for p in players],
             "Vehicles":[{"Vehicle":v} for v in vehicles],
             "VehicleGroups":[{"Vehicle":k,"Players":", ".join(v)} for k,v in vehicle_groups.items()],
             "History":history
-        }
-        st.sidebar.download_button("Download JSON Backup", json.dumps(data, indent=4), "backup.json", "application/json")
+        }, indent=4),
+        file_name="backup.json",
+        mime="application/json"
+    )
 
+    # Upload
     upload_file = st.sidebar.file_uploader("Upload Backup JSON", type="json")
     if upload_file:
         data = json.load(upload_file)
-        reset_all_data(ws_players, ws_vehicles, ws_groups, ws_history)
-        for p in data.get("Players",[]):
-            add_player(ws_players, p["Player"], players)
-        for v in data.get("Vehicles",[]):
-            add_vehicle(ws_vehicles, v["Vehicle"], vehicles)
-        for g in data.get("VehicleGroups",[]):
-            update_vehicle_group(ws_groups, g["Vehicle"], g["Players"].split(", "))
-            vehicle_groups[g["Vehicle"]] = g["Players"].split(", ")
-        for h in data.get("History",[]):
-            append_history(ws_history, h)
+        players = [p["Player"] for p in data.get("Players",[])]
+        vehicles = [v["Vehicle"] for v in data.get("Vehicles",[])]
+        vehicle_groups = {g["Vehicle"]: g["Players"].split(", ") for g in data.get("VehicleGroups",[])}
+        history = data.get("History",[])
         st.sidebar.success("✅ Data restored from backup")
 
 # -----------------------------
-# Main UI: 7 Sections
+# Main UI: 7 Sections (All in-memory operations)
 # -----------------------------
 
 # 1️⃣ Players Superset
@@ -268,30 +230,45 @@ st.header("1️⃣ Players Superset")
 if st.session_state.admin_logged_in:
     new_player = st.text_input("Add new player:")
     if st.button("Add Player"):
-        add_player(ws_players, new_player, players)
-        st.success(f"✅ Added player: {new_player}")
+        if new_player and new_player not in players:
+            players.append(new_player)
+            st.success(f"✅ Added player: {new_player}")
     if players:
         remove_player_name = st.selectbox("Remove a player:", ["None"]+players)
         if remove_player_name!="None" and st.button("Remove Player"):
-            remove_player(ws_players, remove_player_name, players)
+            players.remove(remove_player_name)
             st.success(f"🗑️ Removed player: {remove_player_name}")
+    if st.button("💾 Save Players to Google Sheet") and client:
+        ws_players.clear()
+        ws_players.append_row(["Player"])
+        for p in players:
+            ws_players.append_row([p])
+        st.success("✅ Players saved to Google Sheet")
+
 st.write("**Current Players:**", ", ".join(players))
 
 # 2️⃣ Vehicle Set
-st.header("2️⃣ Vehicle Set (subset of players)")
+st.header("2️⃣ Vehicle Set")
 if st.session_state.admin_logged_in:
     new_vehicle = st.text_input("Add vehicle owner:")
     if st.button("Add Vehicle"):
-        if new_vehicle in players:
-            add_vehicle(ws_vehicles, new_vehicle, vehicles)
+        if new_vehicle in players and new_vehicle not in vehicles:
+            vehicles.append(new_vehicle)
             st.success(f"✅ Added vehicle owner: {new_vehicle}")
         else:
-            st.warning("⚠️ Player must exist in superset")
+            st.warning("⚠️ Vehicle owner must exist in players and not duplicate")
     if vehicles:
         remove_vehicle_name = st.selectbox("Remove vehicle owner:", ["None"]+vehicles)
         if remove_vehicle_name!="None" and st.button("Remove Vehicle"):
-            remove_vehicle(ws_vehicles, remove_vehicle_name, vehicles)
+            vehicles.remove(remove_vehicle_name)
             st.success(f"🗑️ Removed vehicle: {remove_vehicle_name}")
+    if st.button("💾 Save Vehicles to Google Sheet") and client:
+        ws_vehicles.clear()
+        ws_vehicles.append_row(["Vehicle"])
+        for v in vehicles:
+            ws_vehicles.append_row([v])
+        st.success("✅ Vehicles saved to Google Sheet")
+
 st.write("**Current Vehicle Owners:**", ", ".join(vehicles))
 
 # 3️⃣ Vehicle Groups
@@ -301,9 +278,15 @@ if st.session_state.admin_logged_in:
     vg_members = st.multiselect("Select players sharing this vehicle", players)
     if st.button("Add/Update Vehicle Group"):
         if vg_vehicle:
-            update_vehicle_group(ws_groups, vg_vehicle, vg_members)
             vehicle_groups[vg_vehicle] = vg_members
             st.success(f"✅ Group updated for {vg_vehicle}")
+    if st.button("💾 Save Vehicle Groups to Google Sheet") and client:
+        ws_groups.clear()
+        ws_groups.append_row(["Vehicle","Players"])
+        for k,v in vehicle_groups.items():
+            ws_groups.append_row([k, ", ".join(v)])
+        st.success("✅ Vehicle groups saved to Google Sheet")
+
 st.write("**Current Vehicle Groups:**")
 if vehicle_groups:
     for v, members in vehicle_groups.items():
@@ -340,15 +323,30 @@ if st.session_state.admin_logged_in:
             msg = generate_message(game_date, ground_name, players_today, selected)
             st.subheader("📋 Copy-Ready Message")
             st.text_area("Message:", msg, height=200)
-            record = {
+            # Store in memory
+            history.append({
                 "date": str(game_date),
                 "ground": ground_name,
                 "players_present": players_today,
                 "selected_vehicles": selected,
                 "message": msg
-            }
-            append_history(ws_history, record)
+            })
             st.success(f"✅ Vehicles selected: {', '.join(selected)}")
+
+    if st.button("💾 Save Match History to Google Sheet") and client:
+        ws_history.clear()
+        ws_history.append_row(["Date","Ground","Players","Vehicles","Message"])
+        for r in history:
+            ws_history.append_row([
+                r["date"],
+                r["ground"],
+                ", ".join(r["players_present"]),
+                ", ".join(r["selected_vehicles"]),
+                r["message"]
+            ])
+        st.success("✅ Match history saved to Google Sheet")
+
+# 5️⃣ Reserved (future)
 
 # 6️⃣ Usage Table & Chart
 st.header("6️⃣ Vehicle Usage")
