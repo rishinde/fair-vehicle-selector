@@ -192,7 +192,6 @@ if not st.session_state.admin_logged_in:
         if username=="admin" and password=="admin123":
             st.session_state.admin_logged_in = True
             st.success("✅ Logged in as Admin")
-            #st.experimental_rerun()
         else:
             st.error("❌ Incorrect username or password")
 
@@ -230,12 +229,10 @@ if st.session_state.admin_logged_in and client:
         )
         reset_all_data(ws_players, ws_vehicles, ws_groups, ws_history)
         st.sidebar.success("✅ All data reset")
-        st.experimental_rerun()
 
     if st.sidebar.button("↩ Undo Last Entry"):
         undo_last_history(ws_history)
         st.sidebar.success("✅ Last entry undone")
-        st.experimental_rerun()
 
     st.sidebar.header("📂 Backup")
     if st.sidebar.button("📥 Download JSON Backup"):
@@ -261,7 +258,6 @@ if st.session_state.admin_logged_in and client:
         for h in data.get("History",[]):
             append_history(ws_history, h)
         st.sidebar.success("✅ Data restored from backup")
-        st.experimental_rerun()
 
 # -----------------------------
 # Main UI: 7 Sections
@@ -274,13 +270,11 @@ if st.session_state.admin_logged_in:
     if st.button("Add Player"):
         add_player(ws_players, new_player, players)
         st.success(f"✅ Added player: {new_player}")
-        st.experimental_rerun()
     if players:
         remove_player_name = st.selectbox("Remove a player:", ["None"]+players)
         if remove_player_name!="None" and st.button("Remove Player"):
             remove_player(ws_players, remove_player_name, players)
             st.success(f"🗑️ Removed player: {remove_player_name}")
-            st.experimental_rerun()
 st.write("**Current Players:**", ", ".join(players))
 
 # 2️⃣ Vehicle Set
@@ -291,7 +285,6 @@ if st.session_state.admin_logged_in:
         if new_vehicle in players:
             add_vehicle(ws_vehicles, new_vehicle, vehicles)
             st.success(f"✅ Added vehicle owner: {new_vehicle}")
-            st.experimental_rerun()
         else:
             st.warning("⚠️ Player must exist in superset")
     if vehicles:
@@ -299,7 +292,6 @@ if st.session_state.admin_logged_in:
         if remove_vehicle_name!="None" and st.button("Remove Vehicle"):
             remove_vehicle(ws_vehicles, remove_vehicle_name, vehicles)
             st.success(f"🗑️ Removed vehicle: {remove_vehicle_name}")
-            st.experimental_rerun()
 st.write("**Current Vehicle Owners:**", ", ".join(vehicles))
 
 # 3️⃣ Vehicle Groups
@@ -357,9 +349,6 @@ if st.session_state.admin_logged_in:
             }
             append_history(ws_history, record)
             st.success(f"✅ Vehicles selected: {', '.join(selected)}")
-            st.experimental_rerun()
-
-# 5️⃣ Reserved for future (Optional)
 
 # 6️⃣ Usage Table & Chart
 st.header("6️⃣ Vehicle Usage")
