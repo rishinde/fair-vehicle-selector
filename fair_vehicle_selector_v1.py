@@ -395,3 +395,28 @@ if history:
         st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {display_vehicles}")
 else:
     st.info("No match records yet")
+
+# 7️⃣ Recent Match Records
+st.header("7️⃣ Recent Match Records")
+if history:
+    for r in reversed(history[-10:]):
+        st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {r['selected_vehicles']}")
+else:
+    st.info("No match records yet")
+
+# -----------------------------
+# CSV Download for History (everyone)
+# -----------------------------
+if history:
+    st.header("📂 Download Match History")
+    df_history = pd.DataFrame(history)  # columns: date, ground, players_present, selected_vehicles, message
+    import io
+    csv_buffer = io.StringIO()
+    df_history.to_csv(csv_buffer, index=False)
+    st.download_button(
+        "📥 Download History as CSV",
+        data=csv_buffer.getvalue(),
+        file_name="match_history.csv",
+        mime="text/csv"
+    )
+
