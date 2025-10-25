@@ -250,6 +250,12 @@ if st.session_state.admin_logged_in and client:
         vehicles = [v["Vehicle"] for v in data.get("Vehicles",[])]
         vehicle_groups = {g["Vehicle"]: g["Players"].split(", ") for g in data.get("VehicleGroups",[])}
         history = data.get("History",[])
+
+        for r in history:
+            if isinstance(r.get("players_present"), str):
+                r["players_present"] = json.loads(r["players_present"])
+            if isinstance(r.get("selected_vehicles"), str):
+                r["selected_vehicles"] = json.loads(r["selected_vehicles"])
         st.sidebar.success("✅ Data restored from backup")
 
 # -----------------------------
