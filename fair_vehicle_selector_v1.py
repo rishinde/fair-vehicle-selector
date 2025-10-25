@@ -367,6 +367,6 @@ else:
 st.header("7️⃣ Recent Match Records")
 if history:
     for r in reversed(history[-10:]):
-        st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {', '.join(r['selected_vehicles'])}")
+        st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {', '.join(r['vehicles'])}")
 else:
     st.info("No match records yet")
