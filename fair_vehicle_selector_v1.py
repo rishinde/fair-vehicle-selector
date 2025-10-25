@@ -192,7 +192,7 @@ if not st.session_state.admin_logged_in:
         if username=="admin" and password=="admin123":
             st.session_state.admin_logged_in = True
             st.success("✅ Logged in as Admin")
-            st.experimental_rerun()
+            #st.experimental_rerun()
         else:
             st.error("❌ Incorrect username or password")
 
