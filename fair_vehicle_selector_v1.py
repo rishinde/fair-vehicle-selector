@@ -174,12 +174,6 @@ else:
 if st.session_state.admin_logged_in and client:
     st.sidebar.header("⚙️ Admin Controls")
 
-    # -----------------------------
-# Sidebar Admin Controls
-# -----------------------------
-if st.session_state.admin_logged_in and client:
-    st.sidebar.header("⚙️ Admin Controls")
-
     # Initialize backup flag
     if "backup_downloaded" not in st.session_state:
         st.session_state.backup_downloaded = False
@@ -194,7 +188,7 @@ if st.session_state.admin_logged_in and client:
 
     # Download backup button
     if st.sidebar.download_button(
-        "📥 Download Backup Before Reset",
+        "📥 Download Backup",
         json.dumps(backup_data, indent=4),
         file_name=f"backup_before_reset_{date.today()}.json",
         mime="application/json"
@@ -204,7 +198,7 @@ if st.session_state.admin_logged_in and client:
 
     # Reset button: disabled until backup is downloaded
     reset_disabled = not st.session_state.backup_downloaded
-    if st.sidebar.button("🧹 Reset All Data", disabled=reset_disabled):
+    if st.sidebar.button("🧹 Reset All (Backup Mandatory)", disabled=reset_disabled):
         try:
             # Clear in-memory data
             players, vehicles, vehicle_groups, history, usage = [], [], {}, [], {}
