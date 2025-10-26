@@ -1,6 +1,6 @@
 import streamlit as st
 import json
-from datetime import date
+import datetime
 import pandas as pd
 import plotly.express as px
 import time
@@ -68,7 +68,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
         if st.sidebar.download_button(
             "📥 Download Backup",
             json.dumps(backup_data, indent=4),
-            file_name=f"backup_before_reset_{date.today()}.json",
+            file_name=f"backup_before_reset_{datetime.date.today()}.json",
             mime="application/json"
         ):
             st.session_state.backup_downloaded = True
@@ -179,9 +179,8 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
     # -----------------------------
     st.header("4️⃣ Daily Match Selection")
     if st.session_state.admin_logged_in:
-        from datetime import date
 
-        game_date = st.date_input("Select date:", value=date.today())
+        game_date = st.date_input("Select date:", value=datetime.date.today())
         ground_name = st.text_input("Ground name:")
         players_today = st.multiselect("Select players present today:", sorted(players))
         num_needed = st.number_input("Number of vehicles needed:", 1, len(vehicles) if vehicles else 1, 1)
