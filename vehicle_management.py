@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-def vehicle_management_tab(players, vehicles, vehicle_groups, history, usage, client,
+def vehicle_management(players, vehicles, vehicle_groups, history, usage, client,
                            ws_players, ws_vehicles, ws_groups, ws_history):
     st.header("2️⃣ Vehicle Set")
     if st.session_state.admin_logged_in:
