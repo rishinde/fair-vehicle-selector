@@ -5,7 +5,8 @@ import streamlit as st
 import json
 from datetime import date
 sys.path.append(os.path.dirname(__file__))
-from vehicle_management import vehicle_management
+from vehicle_management import vehicle_managemen
+from financial_management import financial_management
 
 # Optional Google Sheets integration
 try:
@@ -187,4 +188,5 @@ with tabs[1]:
 # -----------------------------
 with tabs[2]:
     st.header("💰 Financial Management")
-    st.info("Financial management tab will be implemented here.")
+    financial_management(players, client)
+    #st.info("Financial management tab will be implemented here.")
