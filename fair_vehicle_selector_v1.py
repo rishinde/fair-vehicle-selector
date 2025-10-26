@@ -277,7 +277,7 @@ if st.session_state.admin_logged_in:
             else:
                 st.error(f"❌ Failed to save players: {e}, contact admin")
 
-st.write("**Current Players:**", ", ".join(players))
+st.write("**Current Players:**", ", ".join(sorted(players)))
 
 # 2️⃣ Vehicle Set
 st.header("2️⃣ Vehicle Set")
@@ -307,7 +307,7 @@ if st.session_state.admin_logged_in:
             else:
                 st.error(f"❌ Failed to save players: {e}, contact admin")
 
-st.write("**Current Vehicle Owners:**", ", ".join(vehicles))
+st.write("**Current Vehicle Owners:**", ", ".join(sorted(vehicles)))
 
 # 3️⃣ Vehicle Groups
 st.header("3️⃣ Vehicle Groups")
@@ -343,12 +343,12 @@ st.header("4️⃣ Daily Match Selection")
 if st.session_state.admin_logged_in:
     game_date = st.date_input("Select date:", value=date.today())
     ground_name = st.text_input("Ground name:")
-    players_today = st.multiselect("Select players present today:", players)
+    players_today = st.multiselect("Select players present today:", sorted(players))
     num_needed = st.number_input("Number of vehicles needed:", 1, len(vehicles) if vehicles else 1, 1)
     selection_mode = st.radio("Vehicle Selection Mode:", ["Auto-Select", "Manual-Select"], key="mode")
     
     if selection_mode == "Manual-Select":
-        manual_selected = st.multiselect("Select vehicles manually:", vehicles, default=[])
+        manual_selected = st.multiselect("Select vehicles manually:", sorted(vehicles), default=[])
     else:
         manual_selected = []
 
@@ -405,7 +405,7 @@ if usage:
         {"Player": k, "Vehicle_Used": v["used"], "Matches_Played": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
         for k,v in usage.items() if k in vehicles
     ])
-    df_usage = df_usage.reset_index(drop=True)
+    df_usage = df_usage.sort_values("Player").reset_index(drop=True)
     df_usage.index = df_usage.index + 1
     df_usage.index.name = "S.No"
     st.table(df_usage)
