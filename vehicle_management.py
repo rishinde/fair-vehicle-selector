@@ -260,7 +260,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
     # -----------------------------
     # Recent Match Records
     # -----------------------------
-    st.header("5️⃣ Recent Match Records")
+    st.header("5️⃣ Recent Vehicle Records")
     if history:
         for r in reversed(history[-10:]):
             vehicles_value = r["selected_vehicles"]
@@ -273,7 +273,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
         st.info("No match records yet")
     
     if history:
-        st.header("6️⃣ Download Match History")
+        st.header("6️⃣ Download Vehicle History")
         df_history = pd.DataFrame(history)  # columns: date, ground, players_present, selected_vehicles, message
         import io
         csv_buffer = io.StringIO()
