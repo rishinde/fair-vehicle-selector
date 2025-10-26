@@ -51,7 +51,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
                            ws_players, ws_vehicles, ws_groups, ws_history):
     
     if st.session_state.admin_logged_in and client:
-        st.header("⚙️ Admin Controls - Vehicle Management")
+        st.subheader("⚙️ Admin Controls - Vehicle Management")
         # Initialize backup flag
         if "backup_downloaded" not in st.session_state:
             st.session_state.backup_downloaded = False
