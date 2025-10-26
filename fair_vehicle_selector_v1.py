@@ -403,7 +403,7 @@ st.header("5️⃣ Vehicle Usage")
 if usage:
     df_usage = pd.DataFrame([
         {"Player": k, "Vehicle_Used": v["used"], "Matches_Played": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
-        for k,v in usage.items()
+        for k,v in usage.items() if k in vehicles
     ])
     df_usage = df_usage.reset_index(drop=True)
     df_usage.index = df_usage.index + 1
