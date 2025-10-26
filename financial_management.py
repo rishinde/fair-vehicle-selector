@@ -95,7 +95,7 @@ def financial_management(players, client):
     # Display Financial Table
     # -----------------------------
     st.subheader("Team Financial Data")
-    st.dataframe(df_financial.style.format("{:.2f}"))
+    st.dataframe(df_financial)
 
     # -----------------------------
     # Save to Google Sheet
