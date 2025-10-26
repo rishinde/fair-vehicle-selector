@@ -146,7 +146,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
     # -----------------------------
     # Vehicle Groups
     # -----------------------------
-    st.header("3️⃣ Vehicle Groups")
+    st.header("2️⃣ Vehicle Groups")
     if st.session_state.admin_logged_in:
         vg_vehicle = st.selectbox("Select vehicle to assign group", [""] + vehicles)
         vg_members = st.multiselect("Select players sharing this vehicle", players)
