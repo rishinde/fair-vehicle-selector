@@ -1,7 +1,10 @@
 # team_rrr_mgmt.py
+import sys
+import os
 import streamlit as st
 import json
 from datetime import date
+sys.path.append(os.path.dirname(__file__))
 from vehicle_management import vehicle_management
 
 # Optional Google Sheets integration
