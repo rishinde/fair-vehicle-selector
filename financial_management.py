@@ -53,11 +53,19 @@ def financial_management(players, client):
 
     # Ensure all players exist
     for p in players:
-        if p not in df_financial.get("Player", []):
-            df_financial = pd.concat(
-                [df_financial, pd.DataFrame([{"Player": p, "Total Deposit": 0.0, "Balance": 0.0}])],
-                ignore_index=True
-            )
+        existing_players = set(df_financial["Player"].str.strip()) if "Player" in df_financial.columns else set()
+        for p in players:
+            if p.strip() not in existing_players:
+                df_financial = pd.concat(
+                    [df_financial, pd.DataFrame([{"Player": p.strip(), "Total Deposit": 0.0, "Balance": 0.0}])],
+                    ignore_index=True
+                )
+
+        #if p not in df_financial.get("Player", []):
+        #    df_financial = pd.concat(
+        #        [df_financial, pd.DataFrame([{"Player": p, "Total Deposit": 0.0, "Balance": 0.0}])],
+        #        ignore_index=True
+        #    )
     df_financial.fillna(0.0, inplace=True)
 
     # -----------------------------
