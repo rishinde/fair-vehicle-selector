@@ -76,13 +76,13 @@ def load_gsheet_data(client):
     ws_history = get_or_create_ws("History", ["date","ground","players_present","selected_vehicles","message"])
 
     # Read all data once
-    players = [r["Player"] for r in ws_players.safe_get_records()]
+    players = [r["Player"] for r in ws_players.safe_get_records(ws_players, "Players")]
     time.sleep(0.2)
-    vehicles = [r["Vehicle"] for r in ws_vehicles.safe_get_records()]
+    vehicles = [r["Vehicle"] for r in ws_vehicles.safe_get_records(ws_vehicles, "Vehicles")]
     time.sleep(0.2)
-    vehicle_groups = {r["Vehicle"]: r["Players"].split(", ") for r in ws_groups.safe_get_records()}
+    vehicle_groups = {r["Vehicle"]: r["Players"].split(", ") for r in safe_get_records(ws_groups, "VehicleGroups")}
     time.sleep(0.2)
-    history_records = ws_history.safe_get_records()
+    history_records = safe_get_records(ws_history, "History")
     time.sleep(0.2)
 
     # Compute usage
