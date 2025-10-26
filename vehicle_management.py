@@ -114,7 +114,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
             history = data.get("History",[])
             st.sidebar.success("✅ Data restored from backup, press respective save buttons to save in google sheet")
 
-    st.header("2️⃣ Vehicle Set")
+    st.header("1️⃣ Vehicle Set")
     if st.session_state.admin_logged_in:
         new_vehicle = st.text_input("Add vehicle owner:")
         if st.button("Add Vehicle"):
@@ -177,7 +177,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
     # -----------------------------
     # Daily Match Selection
     # -----------------------------
-    st.header("4️⃣ Daily Match Selection")
+    st.header("3️⃣ Daily Match Selection")
     if st.session_state.admin_logged_in:
 
         game_date = st.date_input("Select date:", value=datetime.date.today())
@@ -240,7 +240,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
     # -----------------------------
     # Vehicle Usage Table & Chart
     # -----------------------------
-    st.header("5️⃣ Vehicle Usage")
+    st.header("4️⃣ Vehicle Usage")
     if usage:
         df_usage = pd.DataFrame([
             {"Player": k, "Vehicle_Used": v["used"], "Matches_Played": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
@@ -260,7 +260,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
     # -----------------------------
     # Recent Match Records
     # -----------------------------
-    st.header("6️⃣ Recent Match Records")
+    st.header("5️⃣ Recent Match Records")
     if history:
         for r in reversed(history[-10:]):
             vehicles_value = r["selected_vehicles"]
@@ -271,5 +271,18 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
             st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {display_vehicles}")
     else:
         st.info("No match records yet")
+    
+    if history:
+        st.header("6️⃣ Download Match History")
+        df_history = pd.DataFrame(history)  # columns: date, ground, players_present, selected_vehicles, message
+        import io
+        csv_buffer = io.StringIO()
+        df_history.to_csv(csv_buffer, index=False)
+        st.download_button(
+            "📥 Download History as CSV",
+            data=csv_buffer.getvalue(),
+            file_name="match_history.csv",
+            mime="text/csv"
+        )
 
     return vehicles, vehicle_groups, history, usage

@@ -148,7 +148,7 @@ tabs = st.tabs(["Player Superset", "Vehicle Management", "Financial Management"]
 # Tab 1: Player Superset
 # -----------------------------
 with tabs[0]:
-    st.header("1️⃣ Player Superset")
+    st.header("Player Superset")
     if st.session_state.admin_logged_in:
         new_player = st.text_input("Add new player:")
         if st.button("Add Player"):
