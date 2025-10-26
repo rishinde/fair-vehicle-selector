@@ -5,7 +5,7 @@ import streamlit as st
 import json
 from datetime import date
 sys.path.append(os.path.dirname(__file__))
-from vehicle_management import vehicle_managemen
+from vehicle_management import vehicle_management
 from financial_management import financial_management
 
 # Optional Google Sheets integration
