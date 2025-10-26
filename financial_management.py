@@ -60,7 +60,7 @@ def financial_management(players, client):
     # -----------------------------
     # Match Fee Entry Section
     # -----------------------------
-    st.subheader("Enter Match Fee")
+    st.subheader("Enter Match Fee Details")
     match_date = st.date_input("Select Match Date", value=date.today())
     ground_name = st.text_input("Ground Name")
     players_today = st.multiselect("Select Players Attending", sorted(players))
@@ -95,6 +95,10 @@ def financial_management(players, client):
     # Display Financial Table
     # -----------------------------
     st.subheader("Team Financial Data")
+    df_financial = df_financial.sort_values("Player")
+    df_financial = df_financial.reset_index(drop=True)
+    df_financial.index = df_financial.index + 1
+    df_financial.index.name = "S.No"
     st.dataframe(df_financial)
 
     # -----------------------------
