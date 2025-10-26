@@ -165,7 +165,7 @@ with tabs[0]:
 # Tab 2: Vehicle Management
 # -----------------------------
 with tabs[1]:
-    vehicle_management(players, vehicles, vehicle_groups, history, usage, ws_vehicles, ws_groups, ws_history)
+    vehicle_management(players, vehicles, vehicle_groups, history, usage, client, ws_players, ws_vehicles, ws_groups, ws_history)
 
 # -----------------------------
 # Tab 3: Financial Management (Placeholder)
