@@ -95,23 +95,38 @@ def load_gsheet_data(client):
 # -----------------------------
 # Streamlit Setup
 # -----------------------------
-st.set_page_config(page_title="Team & Vehicle Management", page_icon="🚗", layout="centered")
-st.title("🏏 Team & Vehicle Management")
+st.set_page_config(page_title="Team RRR Management", page_icon="🏏", layout="centered")
+st.title("🏏 Team RRR Management 🏏")
 
-# Admin Login
 if "admin_logged_in" not in st.session_state:
     st.session_state.admin_logged_in = False
 
-if not st.session_state.admin_logged_in:
-    st.subheader("🔒 Admin Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    if st.button("Login"):
-        if username=="admin" and password=="admin123":
-            st.session_state.admin_logged_in = True
-            st.success("✅ Logged in as Admin")
-        else:
-            st.error("❌ Incorrect username or password")
+with st.sidebar:
+    if not st.session_state.admin_logged_in:
+        st.subheader("🔒 Admin Login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        if st.button("Login"):
+            if username=="admin" and password=="admin123":
+                st.session_state.admin_logged_in = True
+                st.success("✅ Logged in as Admin")
+            else:
+                st.error("❌ Incorrect username or password")
+    
+## Admin Login
+#if "admin_logged_in" not in st.session_state:
+#    st.session_state.admin_logged_in = False
+#
+#if not st.session_state.admin_logged_in:
+#    st.subheader("🔒 Admin Login")
+#    username = st.text_input("Username")
+#    password = st.text_input("Password", type="password")
+#    if st.button("Login"):
+#        if username=="admin" and password=="admin123":
+#            st.session_state.admin_logged_in = True
+#            st.success("✅ Logged in as Admin")
+#        else:
+#            st.error("❌ Incorrect username or password")
 
 # Load Google Sheet data
 client = get_gsheet_client()

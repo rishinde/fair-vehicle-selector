@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import json
 
 def update_usage(selected_players, eligible_players, usage):
     for p in selected_players:
@@ -46,6 +47,71 @@ def generate_message(game_date, ground_name, players, selected):
 
 def vehicle_management(players, vehicles, vehicle_groups, history, usage, client,
                            ws_players, ws_vehicles, ws_groups, ws_history):
+    
+    if st.session_state.admin_logged_in and client:
+        st.header("⚙️ Admin Controls - Vehicle Management")
+        # Initialize backup flag
+        if "backup_downloaded" not in st.session_state:
+            st.session_state.backup_downloaded = False
+
+        # Prepare backup data
+        backup_data = {
+            "Players":[{"Player":p} for p in players],
+            "Vehicles":[{"Vehicle":v} for v in vehicles],
+            "VehicleGroups":[{"Vehicle":k,"Players":", ".join(v)} for k,v in vehicle_groups.items()],
+            "History":history
+        }
+
+        # Download backup button
+        if st.sidebar.download_button(
+            "📥 Download Backup",
+            json.dumps(backup_data, indent=4),
+            file_name=f"backup_before_reset_{date.today()}.json",
+            mime="application/json"
+        ):
+            st.session_state.backup_downloaded = True
+            st.sidebar.success("✅ Backup downloaded. You can now reset data.")
+
+        # Reset button: disabled until backup is downloaded
+        reset_disabled = not st.session_state.backup_downloaded
+        if st.sidebar.button("🧹 Reset All (Backup Mandatory)", disabled=reset_disabled):
+            try:
+                # Clear in-memory data
+                players, vehicles, vehicle_groups, history, usage = [], [], {}, [], {}
+                # Clear Google Sheets
+                ws_players.clear()
+                ws_players.append_row(["Player"])
+                ws_vehicles.clear()
+                ws_vehicles.append_row(["Vehicle"])
+                ws_groups.clear()
+                ws_groups.append_row(["Vehicle","Players"])
+                ws_history.clear()
+                ws_history.append_row(["date","ground","players_present","selected_vehicles","message"])
+                st.sidebar.success("✅ All data reset")
+                # Reset backup flag
+                st.session_state.backup_downloaded = False
+            except Exception as e:
+                if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                    st.sidebar.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
+                else:
+                    st.sidebar.error(f"❌ Failed to reset Google Sheet: {e}")
+
+        # Undo last entry
+        if st.sidebar.button("↩ Undo Last Entry"):
+            if history:
+                history.pop()
+                st.sidebar.success("✅ Last entry removed from memory, save history to google sheet in section 4")
+
+        # Upload
+        upload_file = st.sidebar.file_uploader("Upload Backup JSON", type="json")
+        if upload_file:
+            data = json.load(upload_file)
+            players = [p["Player"] for p in data.get("Players",[])]
+            vehicles = [v["Vehicle"] for v in data.get("Vehicles",[])]
+            vehicle_groups = {g["Vehicle"]: g["Players"].split(", ") for g in data.get("VehicleGroups",[])}
+            history = data.get("History",[])
+            st.sidebar.success("✅ Data restored from backup, press respective save buttons to save in google sheet")
+
     st.header("2️⃣ Vehicle Set")
     if st.session_state.admin_logged_in:
         new_vehicle = st.text_input("Add vehicle owner:")
