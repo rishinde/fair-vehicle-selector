@@ -405,10 +405,13 @@ if usage:
         {"Player": k, "Vehicle_Used": v["used"], "Matches_Played": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
         for k,v in usage.items()
     ])
+    df_usage = df_usage.reset_index(drop=True)
+    df_usage.index = df_usage.index + 1
+    df_usage.index.name = "S.No"
     st.table(df_usage)
     fig = px.bar(df_usage, x="Player", y="Ratio", text="Used", title="Player Vehicle Usage Fairness")
     fig.update_traces(textposition='outside')
-    fig.update_layout(yaxis=dict(range=[1,2.3]))
+    fig.update_layout(yaxis=dict(range=[0,1.2]))
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("No usage data yet")
