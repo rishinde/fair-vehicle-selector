@@ -1,8 +1,8 @@
 import streamlit as st
+import json
+from datetime import date
 import pandas as pd
 import plotly.express as px
-from datetime import date
-import json
 import time
 
 def update_usage(selected_players, eligible_players, usage):
