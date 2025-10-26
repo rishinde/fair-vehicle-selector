@@ -1,216 +1,172 @@
-# vehicle_management.py
+# team_rrr_mgmt.py
 import streamlit as st
-import pandas as pd
-import plotly.express as px
-import time
+import json
 from datetime import date
+from vehicle_management import vehicle_management
+
+# Optional Google Sheets integration
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials
+    GOOGLE_SHEETS_AVAILABLE = True
+except:
+    GOOGLE_SHEETS_AVAILABLE = False
+
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+SHEET_NAME = "Team Management Data"
 
 # -----------------------------
-# Vehicle Management Logic
+# Google Sheets Helper Functions
 # -----------------------------
-def vehicle_management(players, vehicles, vehicle_groups, history, usage, ws_vehicles=None, ws_groups=None, ws_history=None):
-    st.header("🚗 Vehicle Management")
-    st.caption("Manage vehicle owners, groups, and daily match selection")
-
-    # -----------------------------
-    # 1️⃣ Display Player Superset (Read-Only)
-    # -----------------------------
-    st.subheader("Player Superset (Read-Only)")
-    if players:
-        st.write(", ".join(sorted(players)))
-    else:
-        st.info("No players defined. Please add players in Player Superset tab.")
-
-    # -----------------------------
-    # 2️⃣ Vehicle Set Management
-    # -----------------------------
-    st.subheader("Vehicle Set")
-    if st.session_state.get("admin_logged_in", False):
-        new_vehicle = st.text_input("Add vehicle owner:")
-        if st.button("Add Vehicle"):
-            if new_vehicle in players and new_vehicle not in vehicles:
-                vehicles.append(new_vehicle)
-                st.success(f"✅ Added vehicle owner: {new_vehicle}")
-            else:
-                st.warning("⚠️ Vehicle owner must exist in Player Superset and not duplicate")
-
-        if vehicles:
-            remove_vehicle_name = st.selectbox("Remove vehicle owner:", ["None"] + sorted(vehicles))
-            if remove_vehicle_name != "None" and st.button("Remove Vehicle"):
-                vehicles.remove(remove_vehicle_name)
-                st.success(f"🗑️ Removed vehicle: {remove_vehicle_name}")
-
-        if st.button("💾 Save Vehicles to Google Sheet") and ws_vehicles:
-            try:
-                ws_vehicles.clear()
-                ws_vehicles.append_row(["Vehicle"])
-                for v in vehicles:
-                    ws_vehicles.append_row([v])
-                st.success("✅ Vehicles saved to Google Sheet")
-            except Exception as e:
-                if "quota" in str(e).lower() or "rate limit" in str(e).lower():
-                    st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
-                else:
-                    st.error(f"❌ Failed to save vehicles: {e}")
-
-    st.write("**Current Vehicle Owners:**", ", ".join(sorted(vehicles)) if vehicles else "No vehicles defined.")
-
-    # -----------------------------
-    # 3️⃣ Vehicle Groups Management
-    # -----------------------------
-    st.subheader("Vehicle Groups")
-    if st.session_state.get("admin_logged_in", False):
-        vg_vehicle = st.selectbox("Select vehicle to assign group", [""] + sorted(vehicles))
-        vg_members = st.multiselect("Select players sharing this vehicle", sorted(players))
-        if st.button("Add/Update Vehicle Group"):
-            if vg_vehicle:
-                vehicle_groups[vg_vehicle] = vg_members
-                st.success(f"✅ Group updated for {vg_vehicle}")
-
-        if st.button("💾 Save Vehicle Groups to Google Sheet") and ws_groups:
-            try:
-                ws_groups.clear()
-                ws_groups.append_row(["Vehicle", "Players"])
-                for k, v in vehicle_groups.items():
-                    ws_groups.append_row([k, ", ".join(v)])
-                st.success("✅ Vehicle groups saved to Google Sheet")
-            except Exception as e:
-                if "quota" in str(e).lower() or "rate limit" in str(e).lower():
-                    st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
-                else:
-                    st.error(f"❌ Failed to save vehicle groups: {e}")
-
-    if vehicle_groups:
-        st.write("**Current Vehicle Groups:**")
-        for v, members in vehicle_groups.items():
-            st.write(f"{v}: {', '.join(members)}")
-    else:
-        st.write("No vehicle groups defined.")
-
-    # -----------------------------
-    # 4️⃣ Daily Match Selection
-    # -----------------------------
-    st.subheader("Daily Match Selection")
-    if st.session_state.get("admin_logged_in", False):
-        game_date = st.date_input("Select date:", value=date.today())
-        players_today = st.multiselect("Select players present today:", sorted(players))
-        num_needed = st.number_input("Number of vehicles needed:", 1, len(vehicles) if vehicles else 1, 1)
-        selection_mode = st.radio("Vehicle Selection Mode:", ["Auto-Select", "Manual-Select"], key="mode")
-
-        if selection_mode == "Manual-Select":
-            manual_selected = st.multiselect("Select vehicles manually:", sorted(vehicles), default=[])
+def get_gsheet_client():
+    if not GOOGLE_SHEETS_AVAILABLE:
+        return None
+    try:
+        if "gcp_service_account" in st.secrets:
+            sa_info = st.secrets["gcp_service_account"]
+            if isinstance(sa_info, str):
+                sa_info = json.loads(sa_info)
+            creds = Credentials.from_service_account_info(sa_info, scopes=SCOPES)
+            client = gspread.authorize(creds)
+            return client
         else:
-            manual_selected = []
+            return None
+    except Exception as e:
+        st.warning(f"Failed to authorize Google Sheets: {e}")
+        return None
 
-        if st.button("Select Vehicles"):
-            eligible = [v for v in players_today if v in vehicles]
+# -----------------------------
+# Load Google Sheets Data
+# -----------------------------
+def load_gsheet_data(client):
+    try:
+        existing_sheets = [s['name'] for s in client.list_spreadsheet_files()]
+        sh = client.open(SHEET_NAME) if SHEET_NAME in existing_sheets else client.create(SHEET_NAME)
+    except Exception as e:
+        st.error(f"Failed to open or create spreadsheet: {e}")
+        return None, None, None, None, [], [], {}, [], {}
 
-            # Auto-selection logic
-            if selection_mode == "Auto-Select":
-                selected = select_vehicles_auto(vehicles, players_today, num_needed, usage, vehicle_groups)
+    def safe_get_records(ws, name):
+        try:
+            return ws.get_all_records()
+        except Exception as e:
+            if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                st.error(f"⚠️ Google Sheets quota exceeded while reading {name}. Please try again later.")
             else:
-                if len(manual_selected) != num_needed:
-                    st.warning(f"⚠️ Select exactly {num_needed} vehicles")
-                    selected = []
-                else:
-                    selected = manual_selected
-                    update_usage(selected, eligible, usage)
+                st.error(f"❌ Failed to read {name} data: {e}")
+            return []
 
-            if selected:
-                msg = generate_message(game_date, players_today, selected)
-                st.subheader("📋 Copy-Ready Message")
-                st.text_area("Message:", msg, height=200)
+    def get_or_create_ws(name, headers):
+        try:
+            ws = sh.worksheet(name)
+        except gspread.WorksheetNotFound:
+            ws = sh.add_worksheet(name, rows=100, cols=20)
+            ws.append_row(headers)
+        return ws
 
-                # Store in memory
-                history.append({
-                    "date": str(game_date),
-                    "players_present": players_today,
-                    "selected_vehicles": selected,
-                    "message": msg
-                })
-                st.success(f"✅ Vehicles selected: {', '.join(selected)}")
+    ws_players = get_or_create_ws("Players", ["Player"])
+    ws_vehicles = get_or_create_ws("Vehicles", ["Vehicle"])
+    ws_groups = get_or_create_ws("VehicleGroups", ["Vehicle", "Players"])
+    ws_history = get_or_create_ws("History", ["date","players_present","selected_vehicles","message"])
 
-        if st.button("💾 Save Match History to Google Sheet") and ws_history:
+    # Load data
+    players = [r["Player"] for r in safe_get_records(ws_players, "Players")]
+    vehicles = [r["Vehicle"] for r in safe_get_records(ws_vehicles, "Vehicles")]
+    vehicle_groups = {r["Vehicle"]: r["Players"].split(", ") for r in safe_get_records(ws_groups, "VehicleGroups")}
+    history_records = safe_get_records(ws_history, "History")
+
+    # Compute usage
+    usage = {}
+    for record in history_records:
+        for p in record.get("players_present","").split(", "):
+            if p not in usage:
+                usage[p] = {"used":0,"present":0}
+            usage[p]["present"] +=1
+        for v in record.get("selected_vehicles","").split(", "):
+            if v not in usage:
+                usage[v] = {"used":0,"present":0}
+            usage[v]["used"] +=1
+
+    return ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history_records, usage
+
+# -----------------------------
+# Streamlit Setup
+# -----------------------------
+st.set_page_config(page_title="Team & Vehicle Management", page_icon="🚗", layout="centered")
+st.title("🏏 Team & Vehicle Management")
+
+# Admin Login
+if "admin_logged_in" not in st.session_state:
+    st.session_state.admin_logged_in = False
+
+if not st.session_state.admin_logged_in:
+    st.subheader("🔒 Admin Login")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        if username=="admin" and password=="admin123":
+            st.session_state.admin_logged_in = True
+            st.success("✅ Logged in as Admin")
+        else:
+            st.error("❌ Incorrect username or password")
+
+# Load Google Sheet data
+client = get_gsheet_client()
+if client and "gsheet_data" not in st.session_state:
+    st.session_state.gsheet_data = load_gsheet_data(client)
+
+if client:
+    ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history, usage = st.session_state.gsheet_data
+else:
+    st.warning("⚠️ Google Sheets not available. Admin operations disabled.")
+    players, vehicles, vehicle_groups, history, usage = [], [], {}, [], {}
+
+# -----------------------------
+# Tabs Integration
+# -----------------------------
+tabs = st.tabs(["Player Superset", "Vehicle Management", "Financial Management"])
+
+# -----------------------------
+# Tab 1: Player Superset
+# -----------------------------
+with tabs[0]:
+    st.header("1️⃣ Player Superset")
+    if st.session_state.admin_logged_in:
+        new_player = st.text_input("Add new player:")
+        if st.button("Add Player"):
+            if new_player and new_player not in players:
+                players.append(new_player)
+                st.success(f"✅ Added player: {new_player}")
+        if players:
+            remove_player_name = st.selectbox("Remove a player:", ["None"]+players)
+            if remove_player_name != "None" and st.button("Remove Player"):
+                players.remove(remove_player_name)
+                st.success(f"🗑️ Removed player: {remove_player_name}")
+
+        if st.button("💾 Save Players to Google Sheet") and client:
             try:
-                ws_history.clear()
-                ws_history.append_row(["date", "players_present", "selected_vehicles", "message"])
-                for r in history:
-                    players_str = ", ".join(r["players_present"]) if isinstance(r["players_present"], list) else r["players_present"]
-                    vehicles_str = ", ".join(r["selected_vehicles"]) if isinstance(r["selected_vehicles"], list) else r["selected_vehicles"]
-                    ws_history.append_row([r["date"], players_str, vehicles_str, r["message"]])
-                st.success("✅ Match history saved to Google Sheet")
+                ws_players.clear()
+                ws_players.append_row(["Player"])
+                for p in players:
+                    ws_players.append_row([p])
+                st.success("✅ Players saved to Google Sheet")
             except Exception as e:
                 if "quota" in str(e).lower() or "rate limit" in str(e).lower():
                     st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
                 else:
-                    st.error(f"❌ Failed to save match history: {e}")
+                    st.error(f"❌ Failed to save players: {e}")
 
-    # -----------------------------
-    # 5️⃣ Vehicle Usage Table & Chart
-    # -----------------------------
-    st.subheader("Vehicle Usage")
-    if usage:
-        df_usage = pd.DataFrame([
-            {"Player": k, "Vehicle_Used": v["used"], "Matches_Played": v["present"],
-             "Ratio": v["used"]/v["present"] if v["present"] > 0 else 0}
-            for k, v in usage.items() if k in vehicles
-        ])
-        df_usage = df_usage.sort_values("Player").reset_index(drop=True)
-        df_usage.index = df_usage.index + 1
-        df_usage.index.name = "S.No"
-        st.table(df_usage)
-
-        fig = px.bar(df_usage, x="Player", y="Ratio", text="Vehicle_Used", title="Player Vehicle Usage Fairness")
-        fig.update_traces(textposition='outside')
-        fig.update_layout(yaxis=dict(range=[0, 1.2]))
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No usage data yet.")
+    st.write("**Current Players:**", ", ".join(sorted(players)))
 
 # -----------------------------
-# Supporting Functions
+# Tab 2: Vehicle Management
 # -----------------------------
-def update_usage(selected_players, eligible_players, usage):
-    for p in selected_players:
-        if p not in usage:
-            usage[p] = {"used":0, "present":0}
-        usage[p]["used"] += 1
-    for p in eligible_players:
-        if p not in usage:
-            usage[p] = {"used":0, "present":0}
-        usage[p]["present"] += 1
+with tabs[1]:
+    vehicle_management(players, vehicles, vehicle_groups, history, usage, ws_vehicles, ws_groups, ws_history)
 
-def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_groups):
-    selected = []
-    eligible = [v for v in players_today if v in vehicle_set]
-
-    for _ in range(num_needed):
-        if not eligible:
-            break
-        def usage_ratio(p):
-            u = usage.get(p, {"used":0, "present":0})
-            return u["used"]/u["present"] if u["present"]>0 else 0
-
-        ordered = sorted(eligible, key=lambda p: (usage_ratio(p), vehicle_set.index(p)))
-        pick = ordered[0]
-        selected.append(pick)
-        update_usage([pick], eligible, usage)
-
-        # Remove all players sharing same vehicle
-        for members in vehicle_groups.values():
-            if pick in members:
-                eligible = [e for e in eligible if e not in members]
-                break
-        else:
-            eligible.remove(pick)
-
-    return selected
-
-def generate_message(game_date, players_today, selected):
-    message = (
-        f"🏏 Match Details\n"
-        f"📅 Date: {game_date}\n\n"
-        f"👥 Team:\n" + "\n".join([f"- {p}" for p in players_today]) + "\n\n"
-        f"🚗 Vehicles:\n" + "\n".join([f"- {v}" for v in selected])
-    )
-    return message
+# -----------------------------
+# Tab 3: Financial Management (Placeholder)
+# -----------------------------
+with tabs[2]:
+    st.header("💰 Financial Management")
+    st.info("Financial management tab will be implemented here.")
