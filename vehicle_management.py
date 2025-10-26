@@ -2,6 +2,48 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
+def update_usage(selected_players, eligible_players, usage):
+    for p in selected_players:
+        if p not in usage:
+            usage[p] = {"used":0,"present":0}
+        usage[p]["used"] += 1
+    for p in eligible_players:
+        if p not in usage:
+            usage[p] = {"used":0,"present":0}
+        usage[p]["present"] +=1
+
+def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_groups):
+    selected = []
+    eligible = [v for v in players_today if v in vehicle_set]
+    for _ in range(num_needed):
+        if not eligible:
+            break
+        def usage_ratio(p):
+            u = usage.get(p, {"used":0,"present":0})
+            return u["used"]/u["present"] if u["present"]>0 else 0
+        ordered = sorted(eligible, key=lambda p: (usage_ratio(p), vehicle_set.index(p)))
+        pick = ordered[0]
+        selected.append(pick)
+        update_usage([pick], eligible, usage)
+        for members in vehicle_groups.values():
+            if pick in members:
+                eligible = [e for e in eligible if e not in members]
+                break
+        else:
+            eligible.remove(pick)
+    return selected
+
+def generate_message(game_date, ground_name, players, selected):
+    message = (
+        f"🏏 Match Details\n"
+        f"📅 Date: {game_date}\n"
+        f"📍 Venue: {ground_name}\n\n"
+        f"👥 Team:\n" + "\n".join([f"- {p}" for p in players]) + "\n\n"
+        f"🚗 Vehicles:\n" + "\n".join([f"- {v}" for v in selected])
+    )
+    return message
+
+
 def vehicle_management(players, vehicles, vehicle_groups, history, usage, client,
                            ws_players, ws_vehicles, ws_groups, ws_history):
     st.header("2️⃣ Vehicle Set")
@@ -70,7 +112,6 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
     st.header("4️⃣ Daily Match Selection")
     if st.session_state.admin_logged_in:
         from datetime import date
-        from utils import update_usage, select_vehicles_auto, generate_message
 
         game_date = st.date_input("Select date:", value=date.today())
         ground_name = st.text_input("Ground name:")
