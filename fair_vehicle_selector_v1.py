@@ -47,6 +47,17 @@ def load_gsheet_data(client):
     except Exception as e:
         st.error(f"Failed to open or create spreadsheet: {e}")
         return None, None, None, None, [], [], {}, [], {}
+    
+
+    def safe_get_records(ws, name):
+        try:
+            return ws.get_all_records()
+        except Exception as e:
+            if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                st.error(f"⚠️ Google Sheets quota exceeded while reading {name}. Please try again later.")
+            else:
+                st.error(f"❌ Failed to read {name} data: {e}")
+            return []
 
     def get_or_create_ws(name, headers):
         try:
@@ -65,13 +76,13 @@ def load_gsheet_data(client):
     ws_history = get_or_create_ws("History", ["date","ground","players_present","selected_vehicles","message"])
 
     # Read all data once
-    players = [r["Player"] for r in ws_players.get_all_records()]
+    players = [r["Player"] for r in ws_players.safe_get_records()]
     time.sleep(0.2)
-    vehicles = [r["Vehicle"] for r in ws_vehicles.get_all_records()]
+    vehicles = [r["Vehicle"] for r in ws_vehicles.safe_get_records()]
     time.sleep(0.2)
-    vehicle_groups = {r["Vehicle"]: r["Players"].split(", ") for r in ws_groups.get_all_records()}
+    vehicle_groups = {r["Vehicle"]: r["Players"].split(", ") for r in ws_groups.safe_get_records()}
     time.sleep(0.2)
-    history_records = ws_history.get_all_records()
+    history_records = ws_history.safe_get_records()
     time.sleep(0.2)
 
     # Compute usage
@@ -215,13 +226,16 @@ if st.session_state.admin_logged_in and client:
             # Reset backup flag
             st.session_state.backup_downloaded = False
         except Exception as e:
-            st.sidebar.error(f"❌ Failed to reset Google Sheet: {e}")
+            if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                st.sidebar.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
+            else:
+                st.sidebar.error(f"❌ Failed to reset Google Sheet: {e}")
 
     # Undo last entry
     if st.sidebar.button("↩ Undo Last Entry"):
         if history:
             history.pop()
-            st.sidebar.success("✅ Last entry removed from memory")
+            st.sidebar.success("✅ Last entry removed from memory, save history to google sheet in section 4")
 
     # Upload
     upload_file = st.sidebar.file_uploader("Upload Backup JSON", type="json")
@@ -231,7 +245,7 @@ if st.session_state.admin_logged_in and client:
         vehicles = [v["Vehicle"] for v in data.get("Vehicles",[])]
         vehicle_groups = {g["Vehicle"]: g["Players"].split(", ") for g in data.get("VehicleGroups",[])}
         history = data.get("History",[])
-        st.sidebar.success("✅ Data restored from backup")
+        st.sidebar.success("✅ Data restored from backup, press respective save buttons to save in google sheet")
 
 # -----------------------------
 # Main UI: 7 Sections (All in-memory operations)
@@ -251,11 +265,17 @@ if st.session_state.admin_logged_in:
             players.remove(remove_player_name)
             st.success(f"🗑️ Removed player: {remove_player_name}")
     if st.button("💾 Save Players to Google Sheet") and client:
-        ws_players.clear()
-        ws_players.append_row(["Player"])
-        for p in players:
-            ws_players.append_row([p])
-        st.success("✅ Players saved to Google Sheet")
+        try:
+            ws_players.clear()
+            ws_players.append_row(["Player"])
+            for p in players:
+                ws_players.append_row([p])
+            st.success("✅ Players saved to Google Sheet")
+        except Exception as e:
+            if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
+            else:
+                st.error(f"❌ Failed to save players: {e}, contact admin")
 
 st.write("**Current Players:**", ", ".join(players))
 
@@ -275,11 +295,17 @@ if st.session_state.admin_logged_in:
             vehicles.remove(remove_vehicle_name)
             st.success(f"🗑️ Removed vehicle: {remove_vehicle_name}")
     if st.button("💾 Save Vehicles to Google Sheet") and client:
-        ws_vehicles.clear()
-        ws_vehicles.append_row(["Vehicle"])
-        for v in vehicles:
-            ws_vehicles.append_row([v])
-        st.success("✅ Vehicles saved to Google Sheet")
+        try:
+            ws_vehicles.clear()
+            ws_vehicles.append_row(["Vehicle"])
+            for v in vehicles:
+                ws_vehicles.append_row([v])
+            st.success("✅ Vehicles saved to Google Sheet")
+        except Exception as e:
+            if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
+            else:
+                st.error(f"❌ Failed to save players: {e}, contact admin")
 
 st.write("**Current Vehicle Owners:**", ", ".join(vehicles))
 
@@ -293,11 +319,17 @@ if st.session_state.admin_logged_in:
             vehicle_groups[vg_vehicle] = vg_members
             st.success(f"✅ Group updated for {vg_vehicle}")
     if st.button("💾 Save Vehicle Groups to Google Sheet") and client:
-        ws_groups.clear()
-        ws_groups.append_row(["Vehicle","Players"])
-        for k,v in vehicle_groups.items():
-            ws_groups.append_row([k, ", ".join(v)])
-        st.success("✅ Vehicle groups saved to Google Sheet")
+        try:
+            ws_groups.clear()
+            ws_groups.append_row(["Vehicle","Players"])
+            for k,v in vehicle_groups.items():
+                ws_groups.append_row([k, ", ".join(v)])
+            st.success("✅ Vehicle groups saved to Google Sheet")
+        except Exception as e:
+            if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
+            else:
+                st.error(f"❌ Failed to save players: {e}, contact admin")
 
 st.write("**Current Vehicle Groups:**")
 if vehicle_groups:
@@ -346,39 +378,43 @@ if st.session_state.admin_logged_in:
             st.success(f"✅ Vehicles selected: {', '.join(selected)}")
 
     if st.button("💾 Save Match History to Google Sheet") and client:
-        ws_history.clear()
-        ws_history.append_row(["date","ground","players_present","selected_vehicles","message"])
-        for r in history:
-            players_str = ", ".join(r["players_present"]) if isinstance(r["players_present"], list) else r["players_present"]
-            vehicles_str = ", ".join(r["selected_vehicles"]) if isinstance(r["selected_vehicles"], list) else r["selected_vehicles"]
-            ws_history.append_row([
-                r["date"],
-                r["ground"],
-                players_str,
-                vehicles_str,
-                r["message"]
-            ])
-        st.success("✅ Match history saved to Google Sheet")
+        try:
+            ws_history.clear()
+            ws_history.append_row(["date","ground","players_present","selected_vehicles","message"])
+            for r in history:
+                players_str = ", ".join(r["players_present"]) if isinstance(r["players_present"], list) else r["players_present"]
+                vehicles_str = ", ".join(r["selected_vehicles"]) if isinstance(r["selected_vehicles"], list) else r["selected_vehicles"]
+                ws_history.append_row([
+                    r["date"],
+                    r["ground"],
+                    players_str,
+                    vehicles_str,
+                    r["message"]
+                ])
+            st.success("✅ Match history saved to Google Sheet")
+        except Exception as e:
+            if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
+            else:
+                st.error(f"❌ Failed to save players: {e}, contact admin")
 
-# 5️⃣ Reserved (future)
-
-# 6️⃣ Usage Table & Chart
-st.header("6️⃣ Vehicle Usage")
+# 5️⃣ Usage Table & Chart
+st.header("5️⃣ Vehicle Usage")
 if usage:
     df_usage = pd.DataFrame([
-        {"Player": k, "Used": v["used"], "Present": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
+        {"Player": k, "Vehicle_Used": v["used"], "Matches_Played": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
         for k,v in usage.items()
     ])
     st.table(df_usage)
     fig = px.bar(df_usage, x="Player", y="Ratio", text="Used", title="Player Vehicle Usage Fairness")
     fig.update_traces(textposition='outside')
-    fig.update_layout(yaxis=dict(range=[0,1.2]))
+    fig.update_layout(yaxis=dict(range=[1,2.3]))
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("No usage data yet")
 
-# 7️⃣ Recent Match Records
-st.header("7️⃣ Recent Match Records")
+# 6️⃣ Recent Match Records
+st.header("6️⃣ Recent Match Records")
 if history:
     for r in reversed(history[-10:]):
         vehicles_value = r["selected_vehicles"]
