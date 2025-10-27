@@ -149,24 +149,35 @@ tabs = st.tabs(["Player Superset", "Vehicle Management", "Financial Management"]
 # Tab 1: Player Superset
 # -----------------------------
 with tabs[0]:
-    st.header("Player Superset")
+# -----------------------------
+# Tab 1: Player Superset (Card Grid Style)
+# -----------------------------
+    st.header("👥 Player Superset")
+
+    # --- Admin actions ---
     if st.session_state.admin_logged_in:
-        new_player = st.text_input("Add new player:")
-        if st.button("Add Player"):
+        st.subheader("➕ Manage Players")
+        new_player = st.text_input("Add New Player", key="add_player_input")
+        if st.button("Add Player", key="add_player_btn"):
             if new_player and new_player not in players:
                 players.append(new_player)
                 st.success(f"✅ Added player: {new_player}")
-        if players:
-            remove_player_name = st.selectbox("Remove a player:", ["None"]+players)
-            if remove_player_name != "None" and st.button("Remove Player"):
-                players.remove(remove_player_name)
-                st.success(f"🗑️ Removed player: {remove_player_name}")
+            else:
+                st.warning("⚠️ Player name is empty or already exists.")
 
-        if st.button("💾 Save Players to Google Sheet") and client:
+        # Remove player
+        if players:
+            remove_player = st.selectbox("Select Player to Remove", ["None"] + sorted(players))
+            if remove_player != "None" and st.button("🗑️ Remove Player", key="remove_player_btn"):
+                players.remove(remove_player)
+                st.success(f"🗑️ Removed player: {remove_player}")
+
+        # Save to Google Sheet
+        if st.button("💾 Save Players to Google Sheet", key="save_players_btn") and client:
             try:
                 ws_players.clear()
                 ws_players.append_row(["Player"])
-                for p in players:
+                for p in sorted(players):
                     ws_players.append_row([p])
                 st.success("✅ Players saved to Google Sheet")
             except Exception as e:
@@ -175,7 +186,59 @@ with tabs[0]:
                 else:
                     st.error(f"❌ Failed to save players: {e}")
 
-    st.write("**Current Players:**", ", ".join(sorted(players)))
+    # --- Display players as cards ---
+    st.subheader("🏏 Current Players")
+
+    if not players:
+        st.info("No players added yet. Add some from the admin panel.")
+    else:
+        sorted_players = sorted(players)
+        cols = st.columns(4)  # 4 cards per row
+        for i, player in enumerate(sorted_players):
+            with cols[i % 4]:
+                st.markdown(
+                    f"""
+                    <div style='
+                        background-color:#f8f9fa;
+                        padding:15px;
+                        margin:5px;
+                        border-radius:10px;
+                        box-shadow:0 1px 3px rgba(0,0,0,0.1);
+                        text-align:center;
+                    '>
+                        <h4 style='margin:0; color:#007bff;'>🏏 {player}</h4>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+#    st.header("Player Superset")
+#    if st.session_state.admin_logged_in:
+#        new_player = st.text_input("Add new player:")
+#        if st.button("Add Player"):
+#            if new_player and new_player not in players:
+#                players.append(new_player)
+#                st.success(f"✅ Added player: {new_player}")
+#        if players:
+#            remove_player_name = st.selectbox("Remove a player:", ["None"]+players)
+#            if remove_player_name != "None" and st.button("Remove Player"):
+#                players.remove(remove_player_name)
+#                st.success(f"🗑️ Removed player: {remove_player_name}")
+#
+#        if st.button("💾 Save Players to Google Sheet") and client:
+#            try:
+#                ws_players.clear()
+#                ws_players.append_row(["Player"])
+#                for p in players:
+#                    ws_players.append_row([p])
+#                st.success("✅ Players saved to Google Sheet")
+#            except Exception as e:
+#                if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+#                    st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
+#                else:
+#                    st.error(f"❌ Failed to save players: {e}")
+#
+#    st.write("**Current Players:**", ", ".join(sorted(players)))
 
 # -----------------------------
 # Tab 2: Vehicle Management
