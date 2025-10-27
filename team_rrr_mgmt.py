@@ -280,10 +280,10 @@ with tabs[0]:
                     🏏 {player}
                 </div>
                 <div style='background:#f1f9ff; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:0.9rem;'>
-                    <span style='font-weight:600;'>⚔️ Bat:</span> {bat_text}
+                    <span style='font-weight:600;'>⚔️ Bat:</span> {stats_text}
                 </div>
                 <div style='background:#f8fff1; border-radius:6px; padding:6px 10px; font-size:0.9rem;'>
-                    <span style='font-weight:600;'>🎯 Bowl:</span> {bowl_text}
+                    <span style='font-weight:600;'>🎯 Bowl:</span> {statsb_text}
                 </div>
             </div>
             """,
