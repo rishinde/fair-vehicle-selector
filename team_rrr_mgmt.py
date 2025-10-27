@@ -155,6 +155,22 @@ with tabs[0]:
 # -----------------------------
     st.header("👥 Player Superset")
 
+    player_stats = {}
+    try:
+        ws_stats = client.open(SHEET_NAME).worksheet("PlayerStats")
+        stats_data = ws_stats.get_all_records()
+        for row in stats_data:
+            player_name = row.get("Player")
+            if player_name:
+                player_stats[player_name] = {
+                    "Inns": row.get("Inns", 0),
+                    "Runs": row.get("Runs", 0),
+                    "Avg": row.get("Avg", 0),
+                    "SR": row.get("SR", 0)
+                }
+    except Exception:
+        player_stats = {}
+
     # --- Admin actions ---
     if st.session_state.admin_logged_in:
         st.subheader("➕ Manage Players")
@@ -196,23 +212,33 @@ with tabs[0]:
         sorted_players = sorted(players)
         cols = st.columns(4)  # 4 cards per row
         for i, player in enumerate(sorted_players):
-            with cols[i % 4]:
+            stats = player_stats.get(player, None)
+            if stats:
+                stats_text = f"Inns: {stats['Inns']} | Runs: {stats['Runs']} | Avg: {stats['Avg']} | SR: {stats['SR']}"
+            else:
+                stats_text = "No Data Available"
+
+            with cols[i % 2]:
                 st.markdown(
                     f"""
                     <div style='
                         background-color:#f8f9fa;
                         padding:15px;
-                        margin:5px;
-                        border-radius:10px;
-                        box-shadow:0 1px 3px rgba(0,0,0,0.1);
+                        margin:8px 0;
+                        border-radius:12px;
+                        box-shadow:0 2px 5px rgba(0,0,0,0.1);
                         text-align:center;
+                        font-family: "Segoe UI", sans-serif;
+                        transition: all 0.3s ease;
                     '>
-                        <h4 style='margin:0; color:#007bff;'>🏏 {player}</h4>
+                        <h4 style='margin:0;color:#007bff;'>🏏 {player}</h4>
+                        <p style='margin-top:8px;color:#333;font-size:0.9rem;'>
+                            <b>📊 Batting:</b><br>{stats_text}
+                        </p>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
-
 #    st.header("Player Superset")
 #    if st.session_state.admin_logged_in:
 #        new_player = st.text_input("Add new player:")
