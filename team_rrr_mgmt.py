@@ -144,7 +144,7 @@ else:
 # -----------------------------
 # Tabs Integration
 # -----------------------------
-tabs = st.tabs(["Player Superset", "Vehicle Management", "Financial Management","Player Stats Management"])
+tabs = st.tabs(["Player Superset", "Vehicle Management", "Financial Management"])
 
 # -----------------------------
 # Tab 1: Player Superset
@@ -278,6 +278,6 @@ with tabs[2]:
     st.header("💰 Financial Management")
     financial_management(players, client)
     #st.info("Financial management tab will be implemented here.")
-with tabs[3]:
-    st.header("Player Stats Management")
-    player_stats_management(client)
+#with tabs[3]:
+#    st.header("Player Stats Management")
+#    player_stats_management(client)
