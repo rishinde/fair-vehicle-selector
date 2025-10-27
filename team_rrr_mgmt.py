@@ -256,6 +256,8 @@ with tabs[0]:
                     </div>
                     <div style='color:#444; font-size:0.9rem;'>
                         <span style='font-weight:500;'>Bat:</span> {stats_text}
+                    </div>
+                    <div style='color:#444; font-size:0.9rem;'>
                         <span style='font-weight:500;'>Bowl:</span> {statsb_text}
                     </div>
                 </div>
