@@ -243,7 +243,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
     st.header("4️⃣ Vehicle Usage")
     if usage:
         df_usage = pd.DataFrame([
-            {"Player": k, "Vehicle_Used": v["used"], "Matches_Played": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
+            {"Player": k, "Vehicle Used": v["used"], "Matches Played": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
             for k,v in usage.items() if k in vehicles
         ])
         df_usage = df_usage.sort_values("Player").reset_index(drop=True)
