@@ -289,22 +289,21 @@ with tabs[0]:
             bowl_avg = bowl.get("Avg") if bowl else "-"
             bowl_eco = bowl.get("Eco") if bowl else "-"
             
-            with st.container():
-                st.markdown(f"""
-                    <div class="player-card">
-                        <div class="player-header">🏏 {player}</div>
-                        <div class="stats-grid">
-                            <div class="header"></div>
-                            <div class="header">⚔️ Bat</div>
-                            <div class="header">🎯 Bowl</div>
-
-                            <div>Inns</div><div>{bat_inns}</div><div>{bowl_inns}</div>
-                            <div>Runs/Wkts</div><div>{bat_runs}</div><div>{bowl_wkts}</div>
-                            <div>Avg</div><div>{bat_avg}</div><div>{bowl_avg}</div>
-                            <div>SR/Eco</div><div>{bat_sr}</div><div>{bowl_eco}</div>
-                        </div>
+            
+            st.markdown(f"""
+                <div class="player-card">
+                    <div class="player-header">🏏 {player}</div>
+                    <div class="stats-grid">
+                        <div class="header"></div>
+                        <div class="header">⚔️ Bat</div>
+                        <div class="header">🎯 Bowl</div>
+                        <div>Inns</div><div>{bat_inns}</div><div>{bowl_inns}</div>
+                        <div>Runs/Wkts</div><div>{bat_runs}</div><div>{bowl_wkts}</div>
+                        <div>Avg</div><div>{bat_avg}</div><div>{bowl_avg}</div>
+                        <div>SR/Eco</div><div>{bat_sr}</div><div>{bowl_eco}</div>
                     </div>
-                """, unsafe_allow_html=True)
+                </div>
+            """, unsafe_allow_html=True)
     
 # -----------------------------
 # Tab 2: Vehicle Management
