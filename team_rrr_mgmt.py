@@ -210,7 +210,7 @@ with tabs[0]:
         st.info("No players added yet. Add some from the admin panel.")
     else:
         sorted_players = sorted(players)
-        cols = st.columns(4)  # 4 cards per row
+        #cols = st.columns(1)  # 4 cards per row
         for i, player in enumerate(sorted_players):
             stats = player_stats.get(player, None)
             if stats:
@@ -218,54 +218,29 @@ with tabs[0]:
             else:
                 stats_text = "No Data Available"
 
-            with cols[i % 2]:
-                st.markdown(
-                    f"""
-                    <div style='
-                        background-color:#f8f9fa;
-                        padding:15px;
-                        margin:8px 0;
-                        border-radius:12px;
-                        box-shadow:0 2px 5px rgba(0,0,0,0.1);
-                        text-align:center;
-                        font-family: "Segoe UI", sans-serif;
-                        transition: all 0.3s ease;
-                    '>
-                        <h4 style='margin:0;color:#007bff;'>🏏 {player}</h4>
-                        <p style='margin-top:8px;color:#333;font-size:0.9rem;'>
-                            <b>📊 Batting:</b><br>{stats_text}
-                        </p>
+            
+            st.markdown(
+                f"""
+                <div style='
+                    background-color:#ffffff;
+                    border:1px solid #e0e0e0;
+                    padding:15px;
+                    margin:8px 0;
+                    border-radius:12px;
+                    box-shadow:0 2px 6px rgba(0,0,0,0.1);
+                    font-family:"Segoe UI", sans-serif;
+                    transition: all 0.2s ease-in-out;
+                '>
+                    <div style='font-weight:600; color:#007bff; font-size:1.05rem; margin-bottom:4px;'>
+                        🏏 {player}
                     </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-#    st.header("Player Superset")
-#    if st.session_state.admin_logged_in:
-#        new_player = st.text_input("Add new player:")
-#        if st.button("Add Player"):
-#            if new_player and new_player not in players:
-#                players.append(new_player)
-#                st.success(f"✅ Added player: {new_player}")
-#        if players:
-#            remove_player_name = st.selectbox("Remove a player:", ["None"]+players)
-#            if remove_player_name != "None" and st.button("Remove Player"):
-#                players.remove(remove_player_name)
-#                st.success(f"🗑️ Removed player: {remove_player_name}")
-#
-#        if st.button("💾 Save Players to Google Sheet") and client:
-#            try:
-#                ws_players.clear()
-#                ws_players.append_row(["Player"])
-#                for p in players:
-#                    ws_players.append_row([p])
-#                st.success("✅ Players saved to Google Sheet")
-#            except Exception as e:
-#                if "quota" in str(e).lower() or "rate limit" in str(e).lower():
-#                    st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
-#                else:
-#                    st.error(f"❌ Failed to save players: {e}")
-#
-#    st.write("**Current Players:**", ", ".join(sorted(players)))
+                    <div style='color:#444; font-size:0.9rem;'>
+                        <span style='font-weight:500;'>Bat:</span> {stats_text}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
 # -----------------------------
 # Tab 2: Vehicle Management
