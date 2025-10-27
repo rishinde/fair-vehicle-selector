@@ -230,42 +230,44 @@ with tabs[0]:
             .player-card {
                 border: 1px solid #ddd;
                 border-radius: 12px;
-                padding: 12px 16px;
-                margin: 10px 0;
+                padding: 14px 18px;
+                margin: 12px 0;
                 box-shadow: 0 2px 5px rgba(0,0,0,0.05);
                 font-family: 'Segoe UI', sans-serif;
-                transition: 0.3s;
+                transition: 0.3s ease;
             }
             .player-card:hover {
                 transform: scale(1.01);
                 box-shadow: 0 3px 8px rgba(0,0,0,0.1);
             }
-            .bat-bowl-container {
-                display: flex;
-                justify-content: space-between;
-                flex-wrap: wrap;
+            .player-header {
+                font-size: 1.2rem;
+                font-weight: 700;
+                margin-bottom: 10px;
+                color: #007bff;
+            }
+            .stats-grid {
+                display: grid;
+                grid-template-columns: 1.2fr 1fr 1fr;
                 gap: 6px;
-            }
-            .bat-box, .bowl-box {
-                flex: 1 1 45%;
-                border-radius: 8px;
-                padding: 8px 10px;
+                text-align: center;
                 font-size: 0.9rem;
-                box-sizing: border-box;
             }
-            @media (max-width: 600px) {
-                .bat-bowl-container { flex-direction: column; }
-                .bat-box, .bowl-box { width: 100%; }
+            .stats-grid div {
+                padding: 4px 0;
+                border-bottom: 1px solid #eee;
+            }
+            .stats-grid div.header {
+                font-weight: 600;
+                background-color: #f8f9fa;
             }
             @media (prefers-color-scheme: dark) {
-                .player-card { background-color: #1e1e1e; color: #e0e0e0; }
-                .bat-box { background-color: #002b36; color: #e0f7ff; }
-                .bowl-box { background-color: #073642; color: #e0ffe0; }
+                .player-card { background-color: #1e1e1e; color: #e0e0e0; border-color: #333; }
+                .stats-grid div.header { background-color: #2c2c2c; }
+                .player-header { color: #66b3ff; }
             }
-            @media (prefers-color-scheme: light) {
-                .player-card { background-color: #ffffff; color: #202020; }
-                .bat-box { background-color: #f1f9ff; color: #004085; }
-                .bowl-box { background-color: #f8fff1; color: #155724; }
+            @media (max-width: 600px) {
+                .stats-grid { font-size: 0.8rem; }
             }
             </style>
         """, unsafe_allow_html=True)
@@ -273,38 +275,36 @@ with tabs[0]:
         sorted_players = sorted(players)
         #cols = st.columns(1)  # 4 cards per row
         for i, player in enumerate(sorted_players):
-            stats = player_stats.get(player, None)
-            if stats:
-                stats_text = f"Inns: {stats['Inns']} | Runs: {stats['Runs']} | Avg: {stats['Avg']} | SR: {stats['SR']}"
-            else:
-                stats_text = "No Data Available"
-            statsB = player_stats_bowl.get(player, None)
-            if statsB:
-                statsb_text = f"Inns: {statsB['Inns']} | Wkts: {statsB['Wkts']} | Eco: {statsB['Eco']} | Avg: {statsB['Avg']}"
-            else:
-                statsb_text = "No Data Available"
+            bat = player_stats.get(player)
+            bowl = player_stats_bowl.get(player)
+
+            # Extract or default safely
+            bat_inns = bat.get("Inns") if bat else "-"
+            bat_runs = bat.get("Runs") if bat else "-"
+            bat_avg = bat.get("Avg") if bat else "-"
+            bat_sr = bat.get("SR") if bat else "-"
+
+            bowl_inns = bowl.get("Inns") if bowl else "-"
+            bowl_wkts = bowl.get("Wkts") if bowl else "-"
+            bowl_avg = bowl.get("Avg") if bowl else "-"
+            bowl_eco = bowl.get("Eco") if bowl else "-"
             
             with st.container():
-                st.markdown(
-                    f"""
+                st.markdown(f"""
                     <div class="player-card">
-                        <div style='font-weight:600; font-size:1rem; margin-bottom:8px;'>
-                            🏏 {player}
-                        </div>
-                        <div class="bat-bowl-container">
-                            <div class="bat-box">
-                                <span style='font-weight:600;'>⚔️ Bat</span><br>
-                                {stats_text}
-                            </div>
-                            <div class="bowl-box">
-                                <span style='font-weight:600;'>🎯 Bowl</span><br>
-                                {statsb_text}
-                            </div>
+                        <div class="player-header">🏏 {player}</div>
+                        <div class="stats-grid">
+                            <div class="header"></div>
+                            <div class="header">⚔️ Bat</div>
+                            <div class="header">🎯 Bowl</div>
+
+                            <div>Inns</div><div>{bat_inns}</div><div>{bowl_inns}</div>
+                            <div>Runs/Wkts</div><div>{bat_runs}</div><div>{bowl_wkts}</div>
+                            <div>Avg</div><div>{bat_avg}</div><div>{bowl_avg}</div>
+                            <div>SR/Eco</div><div>{bat_sr}</div><div>{bowl_eco}</div>
                         </div>
                     </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                """, unsafe_allow_html=True)
     
 # -----------------------------
 # Tab 2: Vehicle Management
