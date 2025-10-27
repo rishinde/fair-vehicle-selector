@@ -163,10 +163,10 @@ with tabs[0]:
             player_name = row.get("Player")
             if player_name:
                 player_stats[player_name] = {
-                    "Inns": row.get("Inns", 0),
+                    "Inns": row.get("Innings", 0),
                     "Runs": row.get("Runs", 0),
-                    "Avg": row.get("Avg", 0),
-                    "SR": row.get("SR", 0)
+                    "Avg": row.get("Average", 0),
+                    "SR": row.get("StrikeRate", 0)
                 }
     except Exception:
         player_stats = {}
