@@ -295,8 +295,8 @@ with tabs[0]:
                     <div class="player-header">🏏 {player}</div>
                     <div class="stats-grid">
                         <div class="header"></div>
-                        <div class="header">⚔️ Bat</div>
-                        <div class="header">🎯 Bowl</div>
+                        <div class="header"> Bat</div>
+                        <div class="header"> Bowl</div>
                         <div>Inns</div><div>{bat_inns}</div><div>{bowl_inns}</div>
                         <div>Runs/Wkts</div><div>{bat_runs}</div><div>{bowl_wkts}</div>
                         <div>Avg</div><div>{bat_avg}</div><div>{bowl_avg}</div>
