@@ -225,37 +225,51 @@ with tabs[0]:
     if not players:
         st.info("No players added yet. Add some from the admin panel.")
     else:
-        #st.markdown(
-        #    """
-        #    <style>
-        #    @media (prefers-color-scheme: dark) {
-        #        .player-card {
-        #            background-color: #1e1e1e !important;
-        #            color: #e0e0e0 !important;
-        #        }
-        #        .bat-box { background-color: #002b36 !important; color: #e0f7ff !important; }
-        #        .bowl-box { background-color: #073642 !important; color: #e0ffe0 !important; }
-        #    }
-        #    @media (prefers-color-scheme: light) {
-        #        .player-card {
-        #            background-color: #ffffff !important;
-        #            color: #202020 !important;
-        #        }
-        #        .bat-box { background-color: #f1f9ff !important; color: #004085 !important; }
-        #        .bowl-box { background-color: #f8fff1 !important; color: #155724 !important; }
-        #    }
-        #    .player-card {
-        #        border:1px solid #e0e0e0;
-        #        border-radius:12px;
-        #        padding:10px 14px;
-        #        margin:8px 0;
-        #        box-shadow:0 1px 4px rgba(0,0,0,0.06);
-        #        font-family:'Segoe UI', sans-serif;
-        #    }
-        #    </style>
-        #    """,
-        #    unsafe_allow_html=True
-        #)   
+        st.markdown("""
+            <style>
+            .player-card {
+                border: 1px solid #ddd;
+                border-radius: 12px;
+                padding: 12px 16px;
+                margin: 10px 0;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+                font-family: 'Segoe UI', sans-serif;
+                transition: 0.3s;
+            }
+            .player-card:hover {
+                transform: scale(1.01);
+                box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+            }
+            .bat-bowl-container {
+                display: flex;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .bat-box, .bowl-box {
+                flex: 1 1 45%;
+                border-radius: 8px;
+                padding: 8px 10px;
+                font-size: 0.9rem;
+                box-sizing: border-box;
+            }
+            @media (max-width: 600px) {
+                .bat-bowl-container { flex-direction: column; }
+                .bat-box, .bowl-box { width: 100%; }
+            }
+            @media (prefers-color-scheme: dark) {
+                .player-card { background-color: #1e1e1e; color: #e0e0e0; }
+                .bat-box { background-color: #002b36; color: #e0f7ff; }
+                .bowl-box { background-color: #073642; color: #e0ffe0; }
+            }
+            @media (prefers-color-scheme: light) {
+                .player-card { background-color: #ffffff; color: #202020; }
+                .bat-box { background-color: #f1f9ff; color: #004085; }
+                .bowl-box { background-color: #f8fff1; color: #155724; }
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
         sorted_players = sorted(players)
         #cols = st.columns(1)  # 4 cards per row
         for i, player in enumerate(sorted_players):
@@ -270,31 +284,27 @@ with tabs[0]:
             else:
                 statsb_text = "No Data Available"
             
-            st.markdown(
-                f"""
-                <div style='
-                    background-color:#ffffff;
-                    border:1px solid #e0e0e0;
-                    padding:15px;
-                    margin:8px 0;
-                    border-radius:12px;
-                    box-shadow:0 2px 6px rgba(0,0,0,0.1);
-                    font-family:"Segoe UI", sans-serif;
-                    transition: all 0.2s ease-in-out;
-                '>
-                    <div style='font-weight:600; color:#007bff; font-size:1.05rem; margin-bottom:4px;'>
-                        🏏 {player}
+            with st.container():
+                st.markdown(
+                    f"""
+                    <div class="player-card">
+                        <div style='font-weight:600; font-size:1rem; margin-bottom:8px;'>
+                            🏏 {player}
+                        </div>
+                        <div class="bat-bowl-container">
+                            <div class="bat-box">
+                                <span style='font-weight:600;'>⚔️ Bat</span><br>
+                                {stats_text}
+                            </div>
+                            <div class="bowl-box">
+                                <span style='font-weight:600;'>🎯 Bowl</span><br>
+                                {statsb_text}
+                            </div>
+                        </div>
                     </div>
-                    <div style='color:#444; font-size:0.9rem;'>
-                        <span style='font-weight:500;'>Bat:</span> {stats_text}
-                    </div>
-                    <div style='color:#444; font-size:0.9rem;'>
-                        <span style='font-weight:500;'>Bowl:</span> {statsb_text}
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+                    """,
+                    unsafe_allow_html=True
+                )
     
 # -----------------------------
 # Tab 2: Vehicle Management
