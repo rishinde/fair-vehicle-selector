@@ -239,31 +239,56 @@ with tabs[0]:
             else:
                 statsb_text = "No Data Available"
             
+            #st.markdown(
+            #    f"""
+            #    <div style='
+            #        background-color:#ffffff;
+            #        border:1px solid #e0e0e0;
+            #        padding:15px;
+            #        margin:8px 0;
+            #        border-radius:12px;
+            #        box-shadow:0 2px 6px rgba(0,0,0,0.1);
+            #        font-family:"Segoe UI", sans-serif;
+            #        transition: all 0.2s ease-in-out;
+            #    '>
+            #        <div style='font-weight:600; color:#007bff; font-size:1.05rem; margin-bottom:4px;'>
+            #            🏏 {player}
+            #        </div>
+            #        <div style='color:#444; font-size:0.9rem;'>
+            #            <span style='font-weight:500;'>Bat:</span> {stats_text}
+            #        </div>
+            #        <div style='color:#444; font-size:0.9rem;'>
+            #            <span style='font-weight:500;'>Bowl:</span> {statsb_text}
+            #        </div>
+            #    </div>
+            #    """,
+            #    unsafe_allow_html=True
+            #)
+
             st.markdown(
-                f"""
-                <div style='
-                    background-color:#ffffff;
-                    border:1px solid #e0e0e0;
-                    padding:15px;
-                    margin:8px 0;
-                    border-radius:12px;
-                    box-shadow:0 2px 6px rgba(0,0,0,0.1);
-                    font-family:"Segoe UI", sans-serif;
-                    transition: all 0.2s ease-in-out;
-                '>
-                    <div style='font-weight:600; color:#007bff; font-size:1.05rem; margin-bottom:4px;'>
-                        🏏 {player}
-                    </div>
-                    <div style='color:#444; font-size:0.9rem;'>
-                        <span style='font-weight:500;'>Bat:</span> {stats_text}
-                    </div>
-                    <div style='color:#444; font-size:0.9rem;'>
-                        <span style='font-weight:500;'>Bowl:</span> {statsb_text}
-                    </div>
+            f"""
+            <div style='
+                background-color:#ffffff;
+                border:1px solid #e0e0e0;
+                border-radius:12px;
+                padding:10px 14px;
+                margin:8px 0;
+                box-shadow:0 1px 4px rgba(0,0,0,0.06);
+                font-family:"Segoe UI", sans-serif;
+            '>
+                <div style='font-weight:600; color:#007bff; font-size:1rem; margin-bottom:6px;'>
+                    🏏 {player}
                 </div>
-                """,
-                unsafe_allow_html=True
-            )
+                <div style='background:#f1f9ff; border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:0.9rem;'>
+                    <span style='font-weight:600;'>⚔️ Bat:</span> {bat_text}
+                </div>
+                <div style='background:#f8fff1; border-radius:6px; padding:6px 10px; font-size:0.9rem;'>
+                    <span style='font-weight:600;'>🎯 Bowl:</span> {bowl_text}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 # -----------------------------
 # Tab 2: Vehicle Management
