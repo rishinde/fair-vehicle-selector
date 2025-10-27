@@ -7,6 +7,8 @@ from datetime import date
 sys.path.append(os.path.dirname(__file__))
 from vehicle_management import vehicle_management
 from financial_management import financial_management
+from player_stats_management import player_stats_management
+
 
 # Optional Google Sheets integration
 try:
@@ -253,3 +255,5 @@ with tabs[2]:
     st.header("💰 Financial Management")
     financial_management(players, client)
     #st.info("Financial management tab will be implemented here.")
+with tabs[3]:
+    player_stats_management(client)
