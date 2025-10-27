@@ -250,7 +250,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
         df_usage.index = df_usage.index + 1
         df_usage.index.name = "S.No"
         st.table(df_usage)
-        fig = px.bar(df_usage, x="Player", y="Ratio", text="Vehicle_Used", title="Player Vehicle Usage Fairness")
+        fig = px.bar(df_usage, x="Player", y="Ratio", text="Vehicle Used", title="Player Vehicle Usage Fairness")
         fig.update_traces(textposition='outside')
         fig.update_layout(yaxis=dict(range=[0,1.2]))
         st.plotly_chart(fig, use_container_width=True)
