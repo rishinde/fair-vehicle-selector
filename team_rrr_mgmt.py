@@ -144,7 +144,7 @@ else:
 # -----------------------------
 # Tabs Integration
 # -----------------------------
-tabs = st.tabs(["Player Superset", "Vehicle Management", "Financial Management"])
+tabs = st.tabs(["Player Superset", "Vehicle Management", "Financial Management","Player Stats Management"])
 
 # -----------------------------
 # Tab 1: Player Superset
