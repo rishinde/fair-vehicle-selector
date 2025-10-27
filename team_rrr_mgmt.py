@@ -9,7 +9,6 @@ from vehicle_management import vehicle_management
 from financial_management import financial_management
 from player_stats_management import player_stats_management
 
-
 # Optional Google Sheets integration
 try:
     import gspread
@@ -256,4 +255,5 @@ with tabs[2]:
     financial_management(players, client)
     #st.info("Financial management tab will be implemented here.")
 with tabs[3]:
+    st.header("Player Stats Management")
     player_stats_management(client)
