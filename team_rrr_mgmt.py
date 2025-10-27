@@ -170,6 +170,22 @@ with tabs[0]:
                 }
     except Exception:
         player_stats = {}
+    
+    player_stats_bowl = {}
+    try:
+        ws_stats = client.open(SHEET_NAME).worksheet("PlayerStatsBowl")
+        stats_data = ws_stats.get_all_records()
+        for row in stats_data:
+            player_name = row.get("Player")
+            if player_name:
+                player_stats_bowl[player_name] = {
+                    "Inns": row.get("Innings", 0),
+                    "Wkts": row.get("Wickets", 0),
+                    "Eco": row.get("Economy", 0),
+                    "Avg": row.get("Average", 0)
+                }
+    except Exception:
+        player_stats_bowl = {}
 
     # --- Admin actions ---
     if st.session_state.admin_logged_in:
@@ -217,7 +233,11 @@ with tabs[0]:
                 stats_text = f"Inns: {stats['Inns']} | Runs: {stats['Runs']} | Avg: {stats['Avg']} | SR: {stats['SR']}"
             else:
                 stats_text = "No Data Available"
-
+            statsB = player_stats_bowl.get(player, None)
+            if statsB:
+                statsb_text = f"Inns: {statsB['Inns']} | Wkts: {statsB['Wkts']} | Eco: {statsB['Eco']} | Avg: {statsB['Avg']}"
+            else:
+                statsb_text = "No Data Available"
             
             st.markdown(
                 f"""
@@ -236,6 +256,7 @@ with tabs[0]:
                     </div>
                     <div style='color:#444; font-size:0.9rem;'>
                         <span style='font-weight:500;'>Bat:</span> {stats_text}
+                        <span style='font-weight:500;'>Bowl:</span> {statsb_text}
                     </div>
                 </div>
                 """,
