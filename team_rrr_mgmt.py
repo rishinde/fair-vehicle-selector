@@ -225,6 +225,37 @@ with tabs[0]:
     if not players:
         st.info("No players added yet. Add some from the admin panel.")
     else:
+        st.markdown(
+            """
+            <style>
+            @media (prefers-color-scheme: dark) {
+                .player-card {
+                    background-color: #1e1e1e !important;
+                    color: #e0e0e0 !important;
+                }
+                .bat-box { background-color: #002b36 !important; color: #e0f7ff !important; }
+                .bowl-box { background-color: #073642 !important; color: #e0ffe0 !important; }
+            }
+            @media (prefers-color-scheme: light) {
+                .player-card {
+                    background-color: #ffffff !important;
+                    color: #202020 !important;
+                }
+                .bat-box { background-color: #f1f9ff !important; color: #004085 !important; }
+                .bowl-box { background-color: #f8fff1 !important; color: #155724 !important; }
+            }
+            .player-card {
+                border:1px solid #e0e0e0;
+                border-radius:12px;
+                padding:10px 14px;
+                margin:8px 0;
+                box-shadow:0 1px 4px rgba(0,0,0,0.06);
+                font-family:'Segoe UI', sans-serif;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )   
         sorted_players = sorted(players)
         #cols = st.columns(1)  # 4 cards per row
         for i, player in enumerate(sorted_players):
@@ -241,24 +272,15 @@ with tabs[0]:
             
             st.markdown(
                 f"""
-                <div style='
-                    background-color:#ffffff;
-                    border:1px solid #e0e0e0;
-                    padding:15px;
-                    margin:8px 0;
-                    border-radius:12px;
-                    box-shadow:0 2px 6px rgba(0,0,0,0.1);
-                    font-family:"Segoe UI", sans-serif;
-                    transition: all 0.2s ease-in-out;
-                '>
-                    <div style='font-weight:600; color:#007bff; font-size:1.05rem; margin-bottom:4px;'>
+                <div class="player-card">
+                    <div style='font-weight:600; font-size:1rem; margin-bottom:6px;'>
                         🏏 {player}
                     </div>
-                    <div style='color:#444; font-size:0.9rem;'>
-                        <span style='font-weight:500;'>Bat:</span> {stats_text}
+                    <div class="bat-box" style='border-radius:6px; padding:6px 10px; margin-bottom:4px; font-size:0.9rem;'>
+                        <span style='font-weight:600;'>⚔️ Bat:</span> {stats_text}
                     </div>
-                    <div style='color:#444; font-size:0.9rem;'>
-                        <span style='font-weight:500;'>Bowl:</span> {statsb_text}
+                    <div class="bowl-box" style='border-radius:6px; padding:6px 10px; font-size:0.9rem;'>
+                        <span style='font-weight:600;'>🎯 Bowl:</span> {statsb_text}
                     </div>
                 </div>
                 """,
