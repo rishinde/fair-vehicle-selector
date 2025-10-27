@@ -4,5 +4,3 @@ google-auth
 pandas
 plotly
 pdfplumber
-pytesseract
-pdf2image

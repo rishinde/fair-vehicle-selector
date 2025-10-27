@@ -1,150 +1,109 @@
 import streamlit as st
 import pandas as pd
 import pdfplumber
-import pytesseract
-from pdf2image import convert_from_bytes
-from datetime import date
-import io
+import re
 import time
+import json
 
-def extract_player_data_from_pdf(uploaded_file):
-    """Extract player stats from Cricheroes-style leaderboard PDF (supports OCR fallback)."""
-    all_data = []
+def player_stats_management(client):
+    """
+    Handles player stats upload (PDF → Google Sheet).
+    Requires a valid gspread client with write access.
+    """
 
-    # --- Try standard text extraction first ---
-    try:
-        with pdfplumber.open(uploaded_file) as pdf:
-            for page in pdf.pages:
-                text = page.extract_text()
-                if not text:
-                    continue
-                lines = text.split("\n")
-                for line in lines:
-                    parts = line.strip().split()
-                    if len(parts) >= 5 and parts[0].isdigit():
-                        try:
-                            rank = parts[0]
-                            name = " ".join(parts[1:-3])
-                            inns = parts[-3]
-                            runs = parts[-2]
-                            avg = parts[-1]
-                            all_data.append({
-                                "Rank": rank,
-                                "Player": name,
-                                "Innings": inns,
-                                "Runs": runs,
-                                "Average": avg
-                            })
-                        except:
-                            continue
-    except Exception as e:
-        st.warning(f"⚠️ PDF text extraction failed: {e}")
+    st.header("📊 Player Stats Management")
+    st.caption("Upload batting leaderboard PDFs, extract player data, and save to Google Sheets")
 
-    # --- OCR fallback if no text-based data found ---
-    if not all_data:
-        st.info("🧠 Running OCR on image-based PDF (this may take a few seconds)...")
-        try:
-            uploaded_file.seek(0)
-            images = convert_from_bytes(uploaded_file.read())
-            ocr_text = ""
-            for img in images:
-                ocr_text += pytesseract.image_to_string(img) + "\n"
+    SHEET_NAME = "Team Management Data"
+    STATS_TAB = "PlayerStats"
 
-            lines = ocr_text.split("\n")
-            for line in lines:
-                parts = line.strip().split()
-                if len(parts) >= 5 and parts[0].isdigit():
-                    try:
-                        rank = parts[0]
-                        name = " ".join(parts[1:-3])
-                        inns = parts[-3]
-                        runs = parts[-2]
-                        avg = parts[-1]
-                        all_data.append({
-                            "Rank": rank,
-                            "Player": name,
-                            "Innings": inns,
-                            "Runs": runs,
-                            "Average": avg
-                        })
-                    except:
-                        continue
-        except Exception as e:
-            st.error(f"❌ OCR extraction failed: {e}")
-
-    df = pd.DataFrame(all_data)
-    return df
-
-
-def player_stats_management(players, client):
-    """Player Stats Management module for Team RRR app."""
-
-    SHEET_NAME = "Team Player Stats"
+    # -----------------------------
+    # Helper: Get or Create Sheet
+    # -----------------------------
     ws_stats = None
-    df_stats = pd.DataFrame()
-
-    # --- Setup Google Sheet connection ---
     if client:
         try:
             existing_sheets = [s['name'] for s in client.list_spreadsheet_files()]
             sh = client.open(SHEET_NAME) if SHEET_NAME in existing_sheets else client.create(SHEET_NAME)
             try:
-                ws_stats = sh.worksheet("PlayerStats")
+                ws_stats = sh.worksheet(STATS_TAB)
             except:
-                ws_stats = sh.add_worksheet("PlayerStats", rows=200, cols=10)
-                ws_stats.append_row(["Rank", "Player", "Innings", "Runs", "Average"])
+                ws_stats = sh.add_worksheet(STATS_TAB, rows=200, cols=10)
+                ws_stats.append_row(["Player", "Innings", "Runs", "Average", "StrikeRate"])
         except Exception as e:
-            st.error(f"Failed to open or create Player Stats sheet: {e}")
+            st.error(f"❌ Failed to open or create Google Sheet: {e}")
             ws_stats = None
+    else:
+        st.warning("⚠️ Google Sheets not available.")
+        ws_stats = None
 
-    # --- Admin Upload Section ---
-    if st.session_state.admin_logged_in:
-        st.subheader("📤 Upload Player Stats PDF (Cricheroes Leaderboard)")
-        uploaded_file = st.file_uploader("Upload batting leaderboard PDF", type=["pdf"])
-        if uploaded_file:
-            df_stats = extract_player_data_from_pdf(uploaded_file)
-            if not df_stats.empty:
-                st.success(f"✅ Extracted {len(df_stats)} player records from PDF.")
-                st.dataframe(df_stats)
-                if st.button("💾 Save Stats to Google Sheet") and ws_stats is not None:
-                    try:
-                        ws_stats.clear()
-                        ws_stats.append_row(list(df_stats.columns))
-                        for _, row in df_stats.iterrows():
-                            ws_stats.append_row([row[c] for c in df_stats.columns])
-                            time.sleep(0.2)
-                        st.success("✅ Player stats saved successfully to Google Sheet!")
-                    except Exception as e:
-                        if "quota" in str(e).lower() or "rate limit" in str(e).lower():
-                            st.error("⚠️ Google Sheets quota exceeded. Please try again later.")
-                        else:
-                            st.error(f"❌ Failed to save player stats: {e}")
+    # -----------------------------
+    # PDF Upload Section
+    # -----------------------------
+    st.subheader("📤 Upload Batting Leaderboard PDF")
+    uploaded_pdf = st.file_uploader("Upload leaderboard PDF", type=["pdf"])
+
+    parsed_df = None
+
+    if uploaded_pdf:
+        try:
+            with pdfplumber.open(uploaded_pdf) as pdf:
+                text = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
+            
+            # Regex pattern for lines like: "PlayerName   10   250   25.0   120.5"
+            pattern = r"([A-Za-z\s]+)\s+(\d+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)"
+            matches = re.findall(pattern, text)
+
+            if matches:
+                parsed_df = pd.DataFrame(matches, columns=["Player", "Innings", "Runs", "Average", "StrikeRate"])
+                parsed_df["Innings"] = parsed_df["Innings"].astype(int)
+                parsed_df["Runs"] = parsed_df["Runs"].astype(int)
+                parsed_df["Average"] = parsed_df["Average"].astype(float)
+                parsed_df["StrikeRate"] = parsed_df["StrikeRate"].astype(float)
+                parsed_df["Player"] = parsed_df["Player"].str.strip()
+
+                st.success(f"✅ Parsed {len(parsed_df)} player records from PDF")
+                st.dataframe(parsed_df)
             else:
                 st.warning("⚠️ No player data found in this PDF. Please verify formatting.")
 
-    # --- Display Stats from Sheet ---
-    st.subheader("📊 Player Stats Overview")
+        except Exception as e:
+            st.error(f"❌ Failed to parse PDF: {e}")
+
+    # -----------------------------
+    # Save Parsed Data to Google Sheets
+    # -----------------------------
+    if parsed_df is not None and ws_stats:
+        if st.button("💾 Save Stats to Google Sheet"):
+            try:
+                ws_stats.clear()
+                ws_stats.append_row(list(parsed_df.columns))
+                for _, row in parsed_df.iterrows():
+                    ws_stats.append_row(row.tolist())
+                    time.sleep(0.4)  # Prevent rate-limit errors
+                st.success("✅ Player stats saved to Google Sheet successfully")
+            except Exception as e:
+                if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                    st.error("⚠️ Google Sheets quota exceeded. Try again later.")
+                else:
+                    st.error(f"❌ Failed to save stats: {e}")
+
+    # -----------------------------
+    # Display Current Saved Stats
+    # -----------------------------
+    st.subheader("📈 Current Player Stats (from Google Sheet)")
     if ws_stats:
         try:
             records = ws_stats.get_all_records()
-            df_stats = pd.DataFrame(records)
-            if not df_stats.empty:
-                df_stats = df_stats.sort_values("Player")
-                df_stats = df_stats.reset_index(drop=True)
+            if records:
+                df_stats = pd.DataFrame(records)
+                df_stats = df_stats.sort_values("Player").reset_index(drop=True)
                 df_stats.index = df_stats.index + 1
                 df_stats.index.name = "S.No"
                 st.dataframe(df_stats)
-
-                # Highlight Player Superset matches
-                st.subheader("🎯 Player Superset vs Stats Availability")
-                for p in sorted(players):
-                    if p in df_stats["Player"].values:
-                        st.write(f"✅ {p} — Stats Available")
-                    else:
-                        st.write(f"⚠️ {p} — No Data Found")
             else:
-                st.info("ℹ️ No stats data available yet. Please upload a leaderboard PDF.")
+                st.info("No player stats found yet. Upload a PDF to begin.")
         except Exception as e:
-            st.warning(f"⚠️ Could not load stats data: {e}")
+            st.warning(f"⚠️ Could not load PlayerStats from Google Sheet: {e}")
     else:
-        st.info("ℹ️ Google Sheets not connected or PlayerStats sheet not available.")
+        st.info("Google Sheets connection unavailable.")
