@@ -115,9 +115,11 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
             st.sidebar.success("✅ Data restored from backup, press respective save buttons to save in google sheet")
 
     st.header("1️⃣ Vehicle Set")
-    if st.session_state.admin_logged_in:
-        new_vehicle = st.text_input("Add vehicle owner:")
-        if st.button("Add Vehicle"):
+    with st.expander("⚙️ Manage Vehicle Set (Admin Access Required)", expanded=False):
+    #if st.session_state.admin_logged_in:
+        admin_disabled = not st.session_state.admin_logged_in
+        new_vehicle = st.text_input("Add vehicle owner:", disabled=admin_disabled)
+        if st.button("Add Vehicle",disabled=admin_disabled):
             if new_vehicle in players and new_vehicle not in vehicles:
                 vehicles.append(new_vehicle)
                 st.success(f"✅ Added vehicle owner: {new_vehicle}")
@@ -125,10 +127,10 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
                 st.warning("⚠️ Vehicle owner must exist in players and not duplicate")
         if vehicles:
             remove_vehicle_name = st.selectbox("Remove vehicle owner:", ["None"]+vehicles)
-            if remove_vehicle_name!="None" and st.button("Remove Vehicle"):
+            if remove_vehicle_name!="None" and st.button("Remove Vehicle",disabled=admin_disabled):
                 vehicles.remove(remove_vehicle_name)
                 st.success(f"🗑️ Removed vehicle: {remove_vehicle_name}")
-        if st.button("💾 Save Vehicles to Google Sheet") and client:
+        if st.button("💾 Save Vehicles to Google Sheet",disabled=admin_disabled) and client:
             try:
                 ws_vehicles.clear()
                 ws_vehicles.append_row(["Vehicle"])
