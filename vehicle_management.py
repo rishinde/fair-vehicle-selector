@@ -149,14 +149,16 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
     # Vehicle Groups
     # -----------------------------
     st.header("2️⃣ Vehicle Groups")
-    if st.session_state.admin_logged_in:
-        vg_vehicle = st.selectbox("Select vehicle to assign group", [""] + vehicles)
-        vg_members = st.multiselect("Select players sharing this vehicle", players)
-        if st.button("Add/Update Vehicle Group"):
+    st.info("Vehicles from given group wont be selected on same day")
+    with st.expander("⚙️ Manage Vehicle Groups (Admin Access Required)", expanded=False):
+        admin_disabled = not st.session_state.admin_logged_in
+        vg_vehicle = st.selectbox("Select vehicle to assign group", [""] + vehicles, disabled=admin_disabled)
+        vg_members = st.multiselect("Select players sharing this vehicle", players,disabled=admin_disabled)
+        if st.button("Add/Update Vehicle Group",disabled=admin_disabled):
             if vg_vehicle:
                 vehicle_groups[vg_vehicle] = vg_members
                 st.success(f"✅ Group updated for {vg_vehicle}")
-        if st.button("💾 Save Vehicle Groups to Google Sheet") and client:
+        if st.button("💾 Save Vehicle Groups to Google Sheet",disabled=admin_disabled) and client:
             try:
                 ws_groups.clear()
                 ws_groups.append_row(["Vehicle","Players"])
