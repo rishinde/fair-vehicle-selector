@@ -317,8 +317,8 @@ with tabs[1]:
 # -----------------------------
 with tabs[2]:
     st.header("💰 Financial Management")
-    financial_management(players, client)
-    #st.info("Financial management tab will be implemented here.")
+    #financial_management(players, client)
+    st.info("Financial management tab will be implemented here.")
 #with tabs[3]:
 #    st.header("Player Stats Management")
 #    player_stats_management(client)
