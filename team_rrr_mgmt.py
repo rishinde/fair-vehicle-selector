@@ -115,21 +115,6 @@ with st.sidebar:
                 st.success("✅ Logged in as Admin")
             else:
                 st.error("❌ Incorrect username or password")
-    
-## Admin Login
-#if "admin_logged_in" not in st.session_state:
-#    st.session_state.admin_logged_in = False
-#
-#if not st.session_state.admin_logged_in:
-#    st.subheader("🔒 Admin Login")
-#    username = st.text_input("Username")
-#    password = st.text_input("Password", type="password")
-#    if st.button("Login"):
-#        if username=="admin" and password=="admin123":
-#            st.session_state.admin_logged_in = True
-#            st.success("✅ Logged in as Admin")
-#        else:
-#            st.error("❌ Incorrect username or password")
 
 # Load Google Sheet data
 client = get_gsheet_client()
@@ -191,34 +176,43 @@ with tabs[0]:
     # --- Admin actions ---
     if st.session_state.admin_logged_in:
         st.subheader("➕ Manage Players")
-        new_player = st.text_input("Add New Player", key="add_player_input")
-        if st.button("Add Player", key="add_player_btn"):
-            if new_player and new_player not in players:
-                players.append(new_player)
-                st.success(f"✅ Added player: {new_player}")
-            else:
-                st.warning("⚠️ Player name is empty or already exists.")
-
-        # Remove player
-        if players:
-            remove_player = st.selectbox("Select Player to Remove", ["None"] + sorted(players))
-            if remove_player != "None" and st.button("🗑️ Remove Player", key="remove_player_btn"):
-                players.remove(remove_player)
-                st.success(f"🗑️ Removed player: {remove_player}")
-
-        # Save to Google Sheet
-        if st.button("💾 Save Players to Google Sheet", key="save_players_btn") and client:
-            try:
-                ws_players.clear()
-                ws_players.append_row(["Player"])
-                for p in sorted(players):
-                    ws_players.append_row([p])
-                st.success("✅ Players saved to Google Sheet")
-            except Exception as e:
-                if "quota" in str(e).lower() or "rate limit" in str(e).lower():
-                    st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
+        with st.expander("⚙️ Manage Players (Admin Access Required)", expanded=False):
+            admin_disabled = not st.session_state.admin_logged_in
+            
+            new_player = st.text_input(
+            "Add New Player", 
+            key="add_player_input", 
+            disabled=admin_disabled,
+            placeholder="Enter player name..."
+            )
+        
+            if st.button("Add Player", key="add_player_btn"):
+                if new_player and new_player not in players:
+                    players.append(new_player)
+                    st.success(f"✅ Added player: {new_player}")
                 else:
-                    st.error(f"❌ Failed to save players: {e}")
+                    st.warning("⚠️ Player name is empty or already exists.")
+
+            # Remove player
+            if players:
+                remove_player = st.selectbox("Select Player to Remove", ["None"] + sorted(players))
+                if remove_player != "None" and st.button("🗑️ Remove Player", key="remove_player_btn"):
+                    players.remove(remove_player)
+                    st.success(f"🗑️ Removed player: {remove_player}")
+
+            # Save to Google Sheet
+            if st.button("💾 Save Players to Google Sheet", key="save_players_btn") and client:
+                try:
+                    ws_players.clear()
+                    ws_players.append_row(["Player"])
+                    for p in sorted(players):
+                        ws_players.append_row([p])
+                    st.success("✅ Players saved to Google Sheet")
+                except Exception as e:
+                    if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                        st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
+                    else:
+                        st.error(f"❌ Failed to save players: {e}")
 
     # --- Display players as cards ---
     st.subheader("🏏 Current Players")
