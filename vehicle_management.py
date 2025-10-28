@@ -182,20 +182,22 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
     # Daily Match Selection
     # -----------------------------
     st.header("3️⃣ Daily Match Selection")
-    if st.session_state.admin_logged_in:
+    with st.expander("⚙️ Manage Match Selection (Admin Access Required)", expanded=False):
 
-        game_date = st.date_input("Select date:", value=datetime.date.today())
-        ground_name = st.text_input("Ground name:")
-        players_today = st.multiselect("Select players present today:", sorted(players))
-        num_needed = st.number_input("Number of vehicles needed:", 1, len(vehicles) if vehicles else 1, 1)
-        selection_mode = st.radio("Vehicle Selection Mode:", ["Auto-Select", "Manual-Select"], key="mode")
+        admin_disabled = not st.session_state.admin_logged_in
+
+        game_date = st.date_input("Select date:", value=datetime.date.today(),disabled=admin_disabled)
+        ground_name = st.text_input("Ground name:",disabled=admin_disabled)
+        players_today = st.multiselect("Select players present today:", sorted(players),disabled=admin_disabled)
+        num_needed = st.number_input("Number of vehicles needed:", 1, len(vehicles) if vehicles else 1, 1, disabled=admin_disabled)
+        selection_mode = st.radio("Vehicle Selection Mode:", ["Auto-Select", "Manual-Select"], key="mode",disabled=admin_disabled)
         
         if selection_mode == "Manual-Select":
-            manual_selected = st.multiselect("Select vehicles manually:", sorted(vehicles), default=[])
+            manual_selected = st.multiselect("Select vehicles manually:", sorted(vehicles), default=[],disabled=admin_disabled)
         else:
             manual_selected = []
 
-        if st.button("Select Vehicles"):
+        if st.button("Select Vehicles",disabled=admin_disabled):
             eligible = [v for v in players_today if v in vehicles]
             if selection_mode=="Auto-Select":
                 selected = select_vehicles_auto(vehicles, players_today, num_needed, usage, vehicle_groups)
@@ -220,7 +222,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
                 })
                 st.success(f"✅ Vehicles selected: {', '.join(selected)}")
 
-        if st.button("💾 Save Match History to Google Sheet") and client:
+        if st.button("💾 Save Match History to Google Sheet",disabled=admin_disabled) and client:
             try:
                 ws_history.clear()
                 ws_history.append_row(["date","ground","players_present","selected_vehicles","message"])
