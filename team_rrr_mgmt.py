@@ -174,46 +174,47 @@ with tabs[0]:
         player_stats_bowl = {}
 
     # --- Admin actions ---
-    if st.session_state.admin_logged_in:
-        st.subheader("➕ Manage Players")
-        with st.expander("⚙️ Manage Players (Admin Access Required)", expanded=False):
-            admin_disabled = not st.session_state.admin_logged_in
-            
-            new_player = st.text_input(
-            "Add New Player", 
-            key="add_player_input", 
-            disabled=admin_disabled,
-            placeholder="Enter player name..."
-            )
+    #if st.session_state.admin_logged_in:
+        #st.subheader("➕ Manage Players")
+    with st.expander("⚙️ Manage Players (Admin Access Required)", expanded=False):
+        admin_disabled = not st.session_state.admin_logged_in
         
-            if st.button("Add Player", key="add_player_btn"):
-                if new_player and new_player not in players:
-                    players.append(new_player)
-                    st.success(f"✅ Added player: {new_player}")
+        new_player = st.text_input(
+        "Add New Player", 
+        key="add_player_input", 
+        disabled=admin_disabled,
+        placeholder="Enter player name..."
+        )
+    
+        if st.button("Add Player", key="add_player_btn"):
+            if new_player and new_player not in players:
+                players.append(new_player)
+                st.success(f"✅ Added player: {new_player}")
+            else:
+                st.warning("⚠️ Player name is empty or already exists.")
+        # Remove player
+        if players:
+            remove_player = st.selectbox(
+            "Select Player to Remove", 
+            ["None"] + sorted(players),
+            disabled=admin_disabled
+            )
+            if remove_player != "None" and st.button("🗑️ Remove Player", key="remove_player_btn"):
+                players.remove(remove_player)
+                st.success(f"🗑️ Removed player: {remove_player}")
+        # Save to Google Sheet
+        if st.button("💾 Save Players to Google Sheet", key="save_players_btn", disabled=admin_disabled) and client:
+            try:
+                ws_players.clear()
+                ws_players.append_row(["Player"])
+                for p in sorted(players):
+                    ws_players.append_row([p])
+                st.success("✅ Players saved to Google Sheet")
+            except Exception as e:
+                if "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                    st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
                 else:
-                    st.warning("⚠️ Player name is empty or already exists.")
-
-            # Remove player
-            if players:
-                remove_player = st.selectbox("Select Player to Remove", ["None"] + sorted(players))
-                if remove_player != "None" and st.button("🗑️ Remove Player", key="remove_player_btn"):
-                    players.remove(remove_player)
-                    st.success(f"🗑️ Removed player: {remove_player}")
-
-            # Save to Google Sheet
-            if st.button("💾 Save Players to Google Sheet", key="save_players_btn") and client:
-                try:
-                    ws_players.clear()
-                    ws_players.append_row(["Player"])
-                    for p in sorted(players):
-                        ws_players.append_row([p])
-                    st.success("✅ Players saved to Google Sheet")
-                except Exception as e:
-                    if "quota" in str(e).lower() or "rate limit" in str(e).lower():
-                        st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
-                    else:
-                        st.error(f"❌ Failed to save players: {e}")
-
+                    st.error(f"❌ Failed to save players: {e}")
     # --- Display players as cards ---
     st.subheader("🏏 Current Players")
 
