@@ -43,7 +43,7 @@ def get_gsheet_client():
 # -----------------------------
 # Load Google Sheets Data
 # -----------------------------
-@st.cache_data(ttl=300, show_spinner="Loading data from Google Sheets...")
+@st.cache_data(ttl=300, show_spinner="Loading data from Google Sheets...", hash_funcs={gspread.client.Client: id})
 def load_gsheet_data(client):
     try:
         existing_sheets = [s['name'] for s in client.list_spreadsheet_files()]
