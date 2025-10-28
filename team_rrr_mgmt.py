@@ -186,7 +186,7 @@ with tabs[0]:
         placeholder="Enter player name..."
         )
     
-        if st.button("Add Player", key="add_player_btn"):
+        if st.button("Add Player", key="add_player_btn",disabled=admin_disabled):
             if new_player and new_player not in players:
                 players.append(new_player)
                 st.success(f"✅ Added player: {new_player}")
@@ -199,7 +199,7 @@ with tabs[0]:
             ["None"] + sorted(players),
             disabled=admin_disabled
             )
-            if remove_player != "None" and st.button("🗑️ Remove Player", key="remove_player_btn"):
+            if remove_player != "None" and st.button("🗑️ Remove Player", key="remove_player_btn",disabled=admin_disabled):
                 players.remove(remove_player)
                 st.success(f"🗑️ Removed player: {remove_player}")
         # Save to Google Sheet
