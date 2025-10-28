@@ -126,7 +126,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
             else:
                 st.warning("⚠️ Vehicle owner must exist in players and not duplicate")
         if vehicles:
-            remove_vehicle_name = st.selectbox("Remove vehicle owner:", ["None"]+vehicles)
+            remove_vehicle_name = st.selectbox("Remove vehicle owner:", ["None"]+vehicles, disabled=admin_disabled)
             if remove_vehicle_name!="None" and st.button("Remove Vehicle",disabled=admin_disabled):
                 vehicles.remove(remove_vehicle_name)
                 st.success(f"🗑️ Removed vehicle: {remove_vehicle_name}")
