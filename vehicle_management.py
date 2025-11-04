@@ -169,7 +169,7 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
         st.write(f"🎯 Selected: {pick}")
 
         # Update usage tracking
-        update_usage([pick], eligible, usage)
+        #update_usage([pick], eligible, usage)
 
         # Remove picked vehicle + all in same group
         for members in vehicle_groups.values():
@@ -348,6 +348,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
             eligible = [v for v in players_today if v in vehicles]
             if selection_mode=="Auto-Select":
                 selected = select_vehicles_auto(vehicles, players_today, num_needed, usage, vehicle_groups, history)
+                update_usage(selected, eligible, usage)
             else:
                 if len(manual_selected) != num_needed:
                     st.warning(f"⚠️ Select exactly {num_needed} vehicles")
