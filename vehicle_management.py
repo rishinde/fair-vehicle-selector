@@ -36,7 +36,7 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
             eligible.remove(pick)
     return selected
 """
-
+"""
 def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_groups, history):
     selected = []
     eligible = [v for v in players_today if v in vehicle_set]
@@ -89,6 +89,98 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
         else:
             filtered_eligible.remove(pick)
 
+    return selected
+"""
+
+def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_groups, history):
+    """
+    Fairly select vehicles with following logic:
+    ✅ Exclude vehicles (and their groups) used in the last match.
+    ✅ Prioritize least-used (usage ratio).
+    ✅ Break ties by least recently used overall (based on history).
+    """
+    import streamlit as st
+
+    selected = []
+    eligible = [v for v in players_today if v in vehicle_set]
+
+    # --- Step 1: Collect vehicles used in last match ---
+    recently_used = set()
+    if history and isinstance(history, list) and len(history) > 0:
+        last_match = history[-1]
+        last_selected = last_match.get("selected_vehicles", [])
+        st.write("🕓 Last match vehicles:", last_selected)
+
+        if isinstance(last_selected, str):
+            last_selected = [v.strip() for v in last_selected.split(",") if v.strip()]
+
+        for v in last_selected:
+            recently_used.add(v)
+            # Include group members of last used vehicle
+            for members in vehicle_groups.values():
+                if v in members:
+                    recently_used.update(members)
+                    break
+
+        st.write("🕓 Recently Used Vehicles (including group members):", recently_used)
+
+    # --- Step 2: Compute last used order for LRU scoring ---
+    last_used_order = {}
+    if history:
+        for match_index, match in enumerate(reversed(history)):
+            match_selected = match.get("selected_vehicles", [])
+            if isinstance(match_selected, str):
+                match_selected = [v.strip() for v in match_selected.split(",") if v.strip()]
+            for v in match_selected:
+                if v not in last_used_order:
+                    last_used_order[v] = match_index  # smaller = more recent
+    # Default for unseen = large number (never used)
+    st.write("📜 Last used order map:", last_used_order)
+
+    # --- Step 3: Exclude recently used vehicles/groups from current selection ---
+    filtered_eligible = [v for v in eligible if v not in recently_used]
+    if not filtered_eligible:
+        st.warning("⚠️ All vehicles were recently used — using fallback eligibility.")
+        filtered_eligible = eligible.copy()
+
+    st.write("✅ Eligible for selection:", filtered_eligible)
+
+    # --- Step 4: Selection Loop ---
+    for _ in range(num_needed):
+        if not filtered_eligible:
+            break
+
+        def usage_ratio(p):
+            u = usage.get(p, {"used": 0, "present": 0})
+            return u["used"] / u["present"] if u["present"] > 0 else 0
+
+        def recency_score(p):
+            # Higher = longer ago used (or never used)
+            return last_used_order.get(p, float('inf'))
+
+        # Sort by: 1️⃣ least used, 2️⃣ least recently used, 3️⃣ list order
+        ordered = sorted(
+            filtered_eligible,
+            key=lambda p: (usage_ratio(p), -recency_score(p), vehicle_set.index(p))
+        )
+
+        pick = ordered[0]
+        selected.append(pick)
+        st.write(f"🎯 Selected: {pick}")
+
+        # Update usage tracking
+        update_usage([pick], eligible, usage)
+
+        # Remove picked vehicle + all in same group
+        for members in vehicle_groups.values():
+            if pick in members:
+                filtered_eligible = [e for e in filtered_eligible if e not in members]
+                break
+        else:
+            filtered_eligible.remove(pick)
+
+    # --- Step 5: Return Final Selection ---
+    st.write("🚗 Final selected vehicles:", selected)
     return selected
 
 def generate_message(game_date, ground_name, players, selected):
