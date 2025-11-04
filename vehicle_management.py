@@ -14,7 +14,7 @@ def update_usage(selected_players, eligible_players, usage):
         if p not in usage:
             usage[p] = {"used":0,"present":0}
         usage[p]["present"] +=1
-
+"""
 def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_groups):
     selected = []
     eligible = [v for v in players_today if v in vehicle_set]
@@ -34,6 +34,54 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
                 break
         else:
             eligible.remove(pick)
+    return selected
+"""
+
+def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_groups, history):
+    selected = []
+    eligible = [v for v in players_today if v in vehicle_set]
+
+    # --- Step 1: Identify recently used vehicles (last match) ---
+    recently_used = set()
+    if history:
+        last_match = history[-1]
+        last_selected = last_match.get("selected_vehicles", [])
+        for v in last_selected:
+            recently_used.add(v)
+            # Add group members of that vehicle
+            for members in vehicle_groups.values():
+                if v in members:
+                    recently_used.update(members)
+                    break
+
+    # --- Step 2: Exclude recently used vehicles and groups ---
+    eligible = [v for v in eligible if v not in recently_used]
+
+    if not eligible:
+        return []  # No eligible vehicles (can display message outside)
+
+    # --- Step 3: Proceed with fairness (usage ratio) ---
+    for _ in range(num_needed):
+        if not eligible:
+            break
+
+        def usage_ratio(p):
+            u = usage.get(p, {"used": 0, "present": 0})
+            return u["used"] / u["present"] if u["present"] > 0 else 0
+
+        ordered = sorted(eligible, key=lambda p: (usage_ratio(p), vehicle_set.index(p)))
+        pick = ordered[0]
+        selected.append(pick)
+        update_usage([pick], eligible, usage)
+
+        # Remove vehicle’s group from eligibility
+        for members in vehicle_groups.values():
+            if pick in members:
+                eligible = [e for e in eligible if e not in members]
+                break
+        else:
+            eligible.remove(pick)
+
     return selected
 
 def generate_message(game_date, ground_name, players, selected):
@@ -200,7 +248,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
         if st.button("Select Vehicles",disabled=admin_disabled):
             eligible = [v for v in players_today if v in vehicles]
             if selection_mode=="Auto-Select":
-                selected = select_vehicles_auto(vehicles, players_today, num_needed, usage, vehicle_groups)
+                selected = select_vehicles_auto(vehicles, players_today, num_needed, usage, vehicle_groups, history)
             else:
                 if len(manual_selected) != num_needed:
                     st.warning(f"⚠️ Select exactly {num_needed} vehicles")
