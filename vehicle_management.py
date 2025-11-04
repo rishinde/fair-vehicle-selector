@@ -41,51 +41,53 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
     selected = []
     eligible = [v for v in players_today if v in vehicle_set]
 
-    # --- Step 1: Identify recently used vehicles (last match) ---
+    # --- Step 1: Safely fetch last completed match ---
     recently_used = set()
-    if history:
-
-        st.write("🕓 Last match vehicles:", history[-1].get("selected_vehicles", []))
-
-        last_match = history[-1]
+    if history and isinstance(history, list) and len(history) > 0:
+        last_match = history[-1]  # last *saved* match only
         last_selected = last_match.get("selected_vehicles", [])
+        st.write("🕓 Last match vehicles:", last_selected)
+        if isinstance(last_selected, str):
+            last_selected = [v.strip() for v in last_selected.split(",")]
+        
+        # Add last vehicles + all their group members
         for v in last_selected:
             recently_used.add(v)
-            # Add group members of that vehicle
             for members in vehicle_groups.values():
                 if v in members:
                     recently_used.update(members)
                     break
         st.write("🕓 Recently Used vehicles:",recently_used)
 
-    # --- Step 2: Exclude recently used vehicles and groups ---
-    eligible = [v for v in eligible if v not in recently_used]
-    st.write("🕓 Eligible vehicles for Selection:",eligible)
-    
-    if not eligible:
-        return []  # No eligible vehicles (can display message outside)
+    # --- Step 2: Exclude those vehicles/groups from current eligible list ---
+    filtered_eligible = [v for v in eligible if v not in recently_used]
 
-    # --- Step 3: Proceed with fairness (usage ratio) ---
+    st.write("🕓 Eligible vehicles for Selection:",filtered_eligible)
+    if not filtered_eligible:
+        # Fall back: allow selection if everyone was filtered out
+        filtered_eligible = eligible
+
+    # --- Step 3: Fair selection using least usage ratio ---
     for _ in range(num_needed):
-        if not eligible:
+        if not filtered_eligible:
             break
 
         def usage_ratio(p):
             u = usage.get(p, {"used": 0, "present": 0})
             return u["used"] / u["present"] if u["present"] > 0 else 0
 
-        ordered = sorted(eligible, key=lambda p: (usage_ratio(p), vehicle_set.index(p)))
+        ordered = sorted(filtered_eligible, key=lambda p: (usage_ratio(p), vehicle_set.index(p)))
         pick = ordered[0]
         selected.append(pick)
         update_usage([pick], eligible, usage)
 
-        # Remove vehicle’s group from eligibility
+        # Remove all from same group to avoid duplicates
         for members in vehicle_groups.values():
             if pick in members:
-                eligible = [e for e in eligible if e not in members]
+                filtered_eligible = [e for e in filtered_eligible if e not in members]
                 break
         else:
-            eligible.remove(pick)
+            filtered_eligible.remove(pick)
 
     return selected
 
