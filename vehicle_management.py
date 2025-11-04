@@ -44,6 +44,9 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
     # --- Step 1: Identify recently used vehicles (last match) ---
     recently_used = set()
     if history:
+
+        st.write("🕓 Last match vehicles:", history[-1].get("selected_vehicles", []))
+
         last_match = history[-1]
         last_selected = last_match.get("selected_vehicles", [])
         for v in last_selected:
