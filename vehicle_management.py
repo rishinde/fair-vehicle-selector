@@ -48,7 +48,7 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
         last_selected = last_match.get("selected_vehicles", [])
         st.write("🕓 Last match vehicles:", last_selected)
         if isinstance(last_selected, str):
-            last_selected = [v.strip() for v in last_selected.split(",")]
+            last_selected = [v.strip() for v in last_selected.split(",") if v.strip()]
         
         # Add last vehicles + all their group members
         for v in last_selected:
