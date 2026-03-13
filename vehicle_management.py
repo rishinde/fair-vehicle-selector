@@ -370,26 +370,32 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
                 })
                 st.success(f"✅ Vehicles selected: {', '.join(selected)}")
 
-        if st.button("💾 Save Match History to Google Sheet",disabled=admin_disabled) and client:
+        if st.button("💾 Save Match History to Google Sheet", disabled=admin_disabled) and client:
             try:
-                ws_history.clear()
-                ws_history.append_row(["date","ground","players_present","selected_vehicles","message"])
+                data = [["date","ground","players_present","selected_vehicles","message"]]
+        
                 for r in history:
                     players_str = ", ".join(r["players_present"]) if isinstance(r["players_present"], list) else r["players_present"]
                     vehicles_str = ", ".join(r["selected_vehicles"]) if isinstance(r["selected_vehicles"], list) else r["selected_vehicles"]
-                    ws_history.append_row([
+        
+                    data.append([
                         r["date"],
                         r["ground"],
                         players_str,
                         vehicles_str,
                         r["message"]
                     ])
+        
+                ws_history.clear()
+                ws_history.update("A1", data)   # ← SINGLE API CALL
+        
                 st.success("✅ Match history saved to Google Sheet")
+        
             except Exception as e:
                 if "quota" in str(e).lower() or "rate limit" in str(e).lower():
                     st.error("⚠️ Google Sheets quota exceeded. Please try again after a few minutes.")
                 else:
-                    st.error(f"❌ Failed to save match history: {e}, contact admin")
+                    st.error(f"❌ Failed to save match history: {e}")
 
     # -----------------------------
     # Vehicle Usage Table & Chart
