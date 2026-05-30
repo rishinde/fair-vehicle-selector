@@ -261,6 +261,93 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, client
             history = data.get("History",[])
             st.sidebar.success("✅ Data restored from backup, press respective save buttons to save in google sheet")
 
+    st.header("Ground Management")
+
+    with st.expander("⚙️ Manage Grounds (Admin Access Required)", expanded=False):
+
+        admin_disabled = not st.session_state.admin_logged_in
+
+        new_ground = st.text_input(
+            "Ground Name",
+            key="ground_name",
+            disabled=admin_disabled
+        )
+
+        ground_km = st.number_input(
+            "Distance (KM)",
+            min_value=0,
+            step=1,
+            key="ground_km",
+            disabled=admin_disabled
+        )
+
+        if st.button("Add Ground", disabled=admin_disabled):
+
+            existing = [
+                g["Ground"].strip().lower()
+                for g in grounds
+            ]
+
+            if not new_ground.strip():
+                st.warning("⚠️ Ground name cannot be empty")
+
+            elif new_ground.strip().lower() in existing:
+                st.warning("⚠️ Ground already exists")
+
+            else:
+                grounds.append({
+                    "Ground": new_ground.strip(),
+                    "KM": ground_km
+                })
+                st.success(f"✅ Added ground: {new_ground}")
+
+        if grounds:
+
+            st.write("**Current Grounds:**")
+
+            df_grounds = pd.DataFrame(grounds)
+
+            st.table(df_grounds)
+
+        if st.button(
+            "💾 Save Grounds to Google Sheet",
+            disabled=admin_disabled
+        ) and client:
+
+            try:
+
+                ws_grounds.clear()
+
+                ws_grounds.append_row([
+                    "Ground",
+                    "KM"
+                ])
+
+                for g in grounds:
+
+                    ws_grounds.append_row([
+                        g["Ground"],
+                        g["KM"]
+                    ])
+
+                st.success(
+                    "✅ Grounds saved to Google Sheet"
+                )
+
+            except Exception as e:
+
+                if (
+                    "quota" in str(e).lower()
+                    or "rate limit" in str(e).lower()
+                ):
+                    st.error(
+                        "⚠️ Google Sheets quota exceeded."
+                    )
+                else:
+                    st.error(
+                        f"❌ Failed to save grounds: {e}"
+                    )
+
     st.header("1️⃣ Vehicle Set")
     with st.expander("⚙️ Manage Vehicle Set (Admin Access Required)", expanded=False):
     #if st.session_state.admin_logged_in:
