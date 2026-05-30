@@ -73,12 +73,14 @@ def load_gsheet_data(client):
     ws_players = get_or_create_ws("Players", ["Player"])
     ws_vehicles = get_or_create_ws("Vehicles", ["Vehicle"])
     ws_groups = get_or_create_ws("VehicleGroups", ["Vehicle", "Players"])
+    ws_grounds = get_or_create_ws("Grounds", ["Ground", "KM"])  
     ws_history = get_or_create_ws("History", ["date","players_present","selected_vehicles","message"])
 
     # Load data
     players = [r["Player"] for r in safe_get_records(ws_players, "Players")]
     vehicles = [r["Vehicle"] for r in safe_get_records(ws_vehicles, "Vehicles")]
     vehicle_groups = {r["Vehicle"]: r["Players"].split(", ") for r in safe_get_records(ws_groups, "VehicleGroups")}
+    grounds = safe_get_records(ws_grounds, "Grounds")
     history_records = safe_get_records(ws_history, "History")
 
     # Compute usage
@@ -93,7 +95,7 @@ def load_gsheet_data(client):
                 usage[v] = {"used":0,"present":0}
             usage[v]["used"] +=1
 
-    return ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history_records, usage
+    return ws_players, ws_vehicles, ws_groups, ws_history, ws_grounds, players, vehicles, vehicle_groups, history_records, usage, grounds
 
 # -----------------------------
 # Streamlit Setup
@@ -122,7 +124,7 @@ if client and "gsheet_data" not in st.session_state:
     st.session_state.gsheet_data = load_gsheet_data(client)
 
 if client:
-    ws_players, ws_vehicles, ws_groups, ws_history, players, vehicles, vehicle_groups, history, usage = st.session_state.gsheet_data
+    ws_players, ws_vehicles, ws_groups, ws_history, ws_grounds, players, vehicles, vehicle_groups, history, usage, grounds = st.session_state.gsheet_data
 else:
     st.warning("⚠️ Google Sheets not available. Admin operations disabled.")
     players, vehicles, vehicle_groups, history, usage = [], [], {}, [], {}
@@ -305,7 +307,7 @@ with tabs[0]:
 # Tab 2: Vehicle Management
 # -----------------------------
 with tabs[1]:
-    vehicle_management(players, vehicles, vehicle_groups, history, usage, client, ws_players, ws_vehicles, ws_groups, ws_history)
+    vehicle_management(players, vehicles, vehicle_groups, history, usage, grounds, client, ws_players, ws_vehicles, ws_groups, ws_history, ws_grounds)
 
 # -----------------------------
 # Tab 3: Financial Management (Placeholder)

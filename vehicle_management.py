@@ -194,8 +194,8 @@ def generate_message(game_date, ground_name, players, selected):
     return message
 
 
-def vehicle_management(players, vehicles, vehicle_groups, history, usage, client,
-                           ws_players, ws_vehicles, ws_groups, ws_history):
+def vehicle_management(players, vehicles, vehicle_groups, history, usage, grounds, client,
+                           ws_players, ws_vehicles, ws_groups, ws_history, ws_grounds):
     
     if st.session_state.admin_logged_in and client:
         st.sidebar.subheader("⚙️ Admin Controls - Vehicle Management")
