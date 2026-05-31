@@ -768,6 +768,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
                 history
             )
     
+            st.write("rishi")
             st.write(repr(trail))
             st.markdown(
                 f"**🚗 {vehicle}**\n\n{trail}"
