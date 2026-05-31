@@ -527,10 +527,11 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
 
         selected_ground_km = 0
 
+        st.write("Grounds:", grounds)
         for g in grounds:
             if g.get("Ground") == ground_name:
                 selected_ground_km = int(g.get("KM", 0))
-            break
+                break
     
         st.info(f"📍 Distance: {selected_ground_km} km")
 
