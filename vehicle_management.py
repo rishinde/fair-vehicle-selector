@@ -447,7 +447,6 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
         excluded_vehicle_owners = st.multiselect(
             "Vehicle owners not available for selection today (optional)",
             [p for p in players_today if p in vehicles],
-            default=[],
             disabled=admin_disabled,
             help="Use when a vehicle owner is present but should not be considered for vehicle fairness (e.g. came separately, vehicle unavailable, etc.)"
         )
@@ -489,7 +488,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
 
         if st.button("💾 Save Match History to Google Sheet", disabled=admin_disabled) and client:
             try:
-                data = [["date","ground","km","players_present","selected_vehicles","message"]]
+                data = [["date","ground","km","players_present","excluded_vehicle_owners","selected_vehicles","message"]]
         
                 for r in history:
                     players_str = ", ".join(r["players_present"]) if isinstance(r["players_present"], list) else r["players_present"]
