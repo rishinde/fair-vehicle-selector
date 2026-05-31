@@ -819,34 +819,34 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
     else:
         st.info("No history available")
 
-    st.header("8️⃣ Vehicle Fairness Timeline")
-    if history:
-
-        recent_history = history[-10:]
-
-        header = "Owner".ljust(12)
-
-        for h in recent_history:
-            header += pd.to_datetime(
-                h["date"]
-            ).strftime("%d/%m").ljust(8)
-        
-        header += "OV KM"
-        
-        st.code(header)
-        
-        for vehicle in sorted(vehicles):
-        
-            cells, km_summary = build_vehicle_timeline(
-                vehicle,
-                history
-            )
-        
-            row = vehicle.ljust(12)
-        
-            for cell in cells:
-                row += cell.ljust(8)
-        
-            row += km_summary
-        
-            st.code(row)
+#    st.header("8️⃣ Vehicle Fairness Timeline")
+#    if history:
+#
+#        recent_history = history[-10:]
+#
+#        header = "Owner".ljust(12)
+#
+#        for h in recent_history:
+#            header += pd.to_datetime(
+#                h["date"]
+#            ).strftime("%d/%m").ljust(8)
+#        
+#        header += "OV KM"
+#        
+#        st.code(header)
+#        
+#        for vehicle in sorted(vehicles):
+#        
+#            cells, km_summary = build_vehicle_timeline(
+#                vehicle,
+#                history
+#            )
+#        
+#            row = vehicle.ljust(12)
+#        
+#            for cell in cells:
+#                row += cell.ljust(8)
+#        
+#            row += km_summary
+#        
+#            st.code(row)
