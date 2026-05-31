@@ -768,4 +768,5 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
     
     else:
         st.info("No history available")
-        return vehicles, vehicle_groups, history, usage
+    
+    return vehicles, vehicle_groups, history, usage
