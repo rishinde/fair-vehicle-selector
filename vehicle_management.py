@@ -7,105 +7,45 @@ import time
 import matplotlib.pyplot as plt
 import io
 
-def build_timeline_dataframe(vehicles, history):
+def build_vehicle_timeline(vehicle, history):
 
     recent_history = history[-10:]
 
-    columns = ["Owner"]
-    columns.extend([
-        pd.to_datetime(h["date"]).strftime("%d/%m")
-        for h in recent_history
-    ])
-    columns.append("OV KM")
+    cells = []
 
-    rows = []
+    ov_km = 0
+    total_km = 0
 
-    for vehicle in sorted(vehicles):
+    for record in recent_history:
 
-        row = {"Owner": vehicle}
+        km = int(float(record.get("km", 0)))
 
-        ov_km = 0
-        total_km = 0
+        players_present = record.get("players_present", [])
+        selected_vehicles = record.get("selected_vehicles", [])
+        excluded = record.get("excluded_vehicle_owners", [])
 
-        for match in recent_history:
+        if isinstance(players_present, str):
+            players_present = [p.strip() for p in players_present.split(",") if p.strip()]
 
-            date_col = pd.to_datetime(
-                match["date"]
-            ).strftime("%d/%m")
+        if isinstance(selected_vehicles, str):
+            selected_vehicles = [p.strip() for p in selected_vehicles.split(",") if p.strip()]
 
-            km = int(float(match.get("km", 0)))
+        if isinstance(excluded, str):
+            excluded = [p.strip() for p in excluded.split(",") if p.strip()]
 
-            players_present = match.get(
-                "players_present",
-                []
-            )
+        if vehicle not in players_present or vehicle in excluded:
+            cells.append("  -  ")
+            continue
 
-            selected_vehicles = match.get(
-                "selected_vehicles",
-                []
-            )
+        total_km += km
 
-            excluded = match.get(
-                "excluded_vehicle_owners",
-                []
-            )
+        if vehicle in selected_vehicles:
+            cells.append(f"🔵{km}")
+            ov_km += km
+        else:
+            cells.append(f"🟢{km}")
 
-            if isinstance(players_present, str):
-                players_present = [
-                    p.strip()
-                    for p in players_present.split(",")
-                    if p.strip()
-                ]
-
-            if isinstance(selected_vehicles, str):
-                selected_vehicles = [
-                    p.strip()
-                    for p in selected_vehicles.split(",")
-                    if p.strip()
-                ]
-
-            if isinstance(excluded, str):
-                excluded = [
-                    p.strip()
-                    for p in excluded.split(",")
-                    if p.strip()
-                ]
-
-            if vehicle not in players_present:
-                row[date_col] = ""
-                continue
-
-            if vehicle in excluded:
-                row[date_col] = ""
-                continue
-
-            total_km += km
-
-            if vehicle in selected_vehicles:
-                row[date_col] = f"🔵{km}"
-                ov_km += km
-            else:
-                row[date_col] = f"🟢{km}"
-
-        ratio = (
-            ov_km / total_km
-            if total_km > 0
-            else 0
-        )
-
-        row["OV KM"] = f"{ov_km}/{total_km}"
-        row["_ratio"] = ratio
-
-        rows.append(row)
-
-    df = pd.DataFrame(rows)
-
-    df = df.sort_values(
-        "_ratio",
-        ascending=True
-    )
-
-    return df.drop(columns=["_ratio"])
+    return cells, f"{ov_km}/{total_km}"
 
 def build_vehicle_trail(vehicle, history):
 
@@ -882,54 +822,31 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
     st.header("8️⃣ Vehicle Fairness Timeline")
     if history:
 
-        df_timeline = build_timeline_dataframe(
-            vehicles,
-            history
-        )
+        recent_history = history[-10:]
 
-        st.dataframe(
-            df_timeline,
-            use_container_width=True
-        )
+        header = "Owner".ljust(12)
 
-        fig, ax = plt.subplots(
-            figsize=(18, max(4, len(df_timeline) * 0.5))
-        )
-
-        ax.axis("off")
-
-        table = ax.table(
-            cellText=df_timeline.values,
-            colLabels=df_timeline.columns,
-            loc="center"
-        )
-
-        table.auto_set_font_size(False)
-        table.set_fontsize(9)
-        table.scale(1.2, 1.6)
-
-        plt.title(
-            "Vehicle Fairness Timeline (Last 10 Matches)",
-            pad=20
-        )
-
-        buf = io.BytesIO()
-
-        plt.savefig(
-            buf,
-            format="png",
-            bbox_inches="tight"
-        )
-
-        buf.seek(0)
-
-        st.image(buf)
-
-        st.download_button(
-            "📥 Download Timeline Image",
-            data=buf,
-            file_name="vehicle_fairness_timeline.png",
-            mime="image/png"
-        )
-    
-    return vehicles, vehicle_groups, history, usage
+        for h in recent_history:
+            header += pd.to_datetime(
+                h["date"]
+            ).strftime("%d/%m").ljust(8)
+        
+        header += "OV KM"
+        
+        st.code(header)
+        
+        for vehicle in sorted(vehicles):
+        
+            cells, km_summary = build_vehicle_timeline(
+                vehicle,
+                history
+            )
+        
+            row = vehicle.ljust(12)
+        
+            for cell in cells:
+                row += cell.ljust(8)
+        
+            row += km_summary
+        
+            st.code(row)
