@@ -47,9 +47,9 @@ def build_vehicle_trail(vehicle, history):
             continue
 
         if vehicle in selected_vehicles:
-            trail.append(f"🔵TV({km})")
+            trail.append(f"🔵OV({km})")
         else:
-            trail.append(f"🟢OV({km})")
+            trail.append(f"🟢TV({km})")
 
     return " → ".join(trail)
 
@@ -751,7 +751,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
             mime="text/csv"
         )
 
-    st.header("5️⃣ Vehicle Journey Trail")
+    st.header("7️⃣ Vehicle Journey Trail")
 
     if history:
     
