@@ -559,7 +559,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
             if selected_ground_km <= 0:
                 st.error(f"❌ Ground '{ground_name}' does not have a valid KM configured.")
                 st.stop()
-                
+
             eligible = [v for v in players_today if v in vehicles]
             if selection_mode=="Auto-Select":
                 selected = select_vehicles_auto(vehicles, players_today, num_needed, usage, vehicle_groups, history)
@@ -574,7 +574,8 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
             if selected:
                 msg = generate_message(game_date, ground_name, players_today, selected)
                 st.subheader("📋 Copy-Ready Message")
-                st.text_area("Message:", msg, height=200)
+                #st.text_area("Message:", msg, height=200)
+                st.code(msg, language=None)
                 # Store in memory
                 history.append({
                     "date": str(game_date),
