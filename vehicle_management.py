@@ -50,10 +50,10 @@ def build_vehicle_trail(vehicle, history):
         total_km += km
 
         if vehicle in selected_vehicles:
-            trail.append(f"🔵TV({km})")
-        else:
-            trail.append(f"🟢OV({km})")
+            trail.append(f"🔵OV({km})")
             ov_km += km
+        else:
+            trail.append(f"🟢TV({km})")
 
     trail_text = " → ".join(trail)
 
