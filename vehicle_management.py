@@ -530,7 +530,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
         for g in grounds:
             if g.get("Ground") == ground_name:
                 selected_ground_km = int(g.get("KM", 0))
-            break
+                break
     
         st.info(f"📍 Distance: {selected_ground_km} km")
 
@@ -552,6 +552,14 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
             manual_selected = []
 
         if st.button("Select Vehicles",disabled=admin_disabled):
+            if not ground_name:
+                st.error("❌ Please select a ground.")
+                st.stop()
+
+            if selected_ground_km <= 0:
+                st.error(f"❌ Ground '{ground_name}' does not have a valid KM configured.")
+                st.stop()
+                
             eligible = [v for v in players_today if v in vehicles]
             if selection_mode=="Auto-Select":
                 selected = select_vehicles_auto(vehicles, players_today, num_needed, usage, vehicle_groups, history)
