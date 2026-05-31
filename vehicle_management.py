@@ -5,6 +5,54 @@ import pandas as pd
 import plotly.express as px
 import time
 
+def calculate_km_stats(vehicle, history):
+
+    vehicle_km = 0
+    eligible_km = 0
+
+    for record in history:
+
+        km = float(record.get("km", 0))
+
+        players_present = record.get("players_present", [])
+        selected_vehicles = record.get("selected_vehicles", [])
+        excluded = record.get("excluded_vehicle_owners", [])
+
+        if isinstance(players_present, str):
+            players_present = [
+                p.strip()
+                for p in players_present.split(",")
+                if p.strip()
+            ]
+
+        if isinstance(selected_vehicles, str):
+            selected_vehicles = [
+                v.strip()
+                for v in selected_vehicles.split(",")
+                if v.strip()
+            ]
+
+        if isinstance(excluded, str):
+            excluded = [
+                p.strip()
+                for p in excluded.split(",")
+                if p.strip()
+            ]
+
+        if vehicle in players_present and vehicle not in excluded:
+            eligible_km += km
+
+        if vehicle in selected_vehicles:
+            vehicle_km += km
+
+    ratio = (
+        vehicle_km / eligible_km
+        if eligible_km > 0
+        else 0
+    )
+
+    return vehicle_km, eligible_km, ratio
+
 def update_usage(selected_players, eligible_players, usage):
     for p in selected_players:
         if p not in usage:
@@ -520,21 +568,48 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
     # Vehicle Usage Table & Chart
     # -----------------------------
     st.header("4️⃣ Vehicle Usage")
-    if usage:
-        df_usage = pd.DataFrame([
-            {"Player": k, "Vehicle Used": v["used"], "Matches Played": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
-            for k,v in usage.items() if k in vehicles
-        ])
-        df_usage = df_usage.sort_values("Player").reset_index(drop=True)
-        df_usage.index = df_usage.index + 1
-        df_usage.index.name = "S.No"
-        st.table(df_usage)
-        fig = px.bar(df_usage, x="Player", y="Ratio", text="Vehicle Used", title="Player Vehicle Usage Fairness")
-        fig.update_traces(textposition='outside')
-        fig.update_layout(yaxis=dict(range=[0,1.2]))
-        st.plotly_chart(fig, use_container_width=True)
+    #if usage:
+    #    df_usage = pd.DataFrame([
+    #        {"Player": k, "Vehicle Used": v["used"], "Matches Played": v["present"], "Ratio": v["used"]/v["present"] if v["present"]>0 else 0}
+    #        for k,v in usage.items() if k in vehicles
+    #    ])
+    #    df_usage = df_usage.sort_values("Player").reset_index(drop=True)
+    #    df_usage.index = df_usage.index + 1
+    #    df_usage.index.name = "S.No"
+    #    st.table(df_usage)
+    #    fig = px.bar(df_usage, x="Player", y="Ratio", text="Vehicle Used", title="Player Vehicle Usage Fairness")
+    #    fig.update_traces(textposition='outside')
+    #    fig.update_layout(yaxis=dict(range=[0,1.2]))
+    #    st.plotly_chart(fig, use_container_width=True)
+    #else:
+    #    st.info("No usage data yet")
+
+    if history:
+
+        km_rows = []
+
+        for vehicle in sorted(vehicles):
+
+            vehicle_km, eligible_km, ratio = calculate_km_stats(
+                vehicle,
+                history
+            )
+
+            km_rows.append({
+                "Vehicle Owner": vehicle,
+                "Vehicle KM": vehicle_km,
+                "Eligible KM": eligible_km,
+                "KM Ratio": round(ratio, 3)
+            })
+
+        df_km = pd.DataFrame(km_rows)
+
+        st.table(df_km)
+
     else:
-        st.info("No usage data yet")
+        st.info("No KM history yet")
+    
+    
 
     # -----------------------------
     # Recent Match Records
