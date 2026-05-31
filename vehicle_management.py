@@ -139,6 +139,52 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
 
     return selected
 """
+def calculate_km_ratio(vehicle, history):
+
+    vehicle_km = 0
+    eligible_km = 0
+
+    for record in history:
+
+        km = float(record.get("km", 0))
+
+        players_present = record.get("players_present", [])
+        selected_vehicles = record.get("selected_vehicles", [])
+        excluded = record.get("excluded_vehicle_owners", [])
+
+        if isinstance(players_present, str):
+            players_present = [
+                p.strip()
+                for p in players_present.split(",")
+                if p.strip()
+            ]
+
+        if isinstance(selected_vehicles, str):
+            selected_vehicles = [
+                v.strip()
+                for v in selected_vehicles.split(",")
+                if v.strip()
+            ]
+
+        if isinstance(excluded, str):
+            excluded = [
+                p.strip()
+                for p in excluded.split(",")
+                if p.strip()
+            ]
+
+        # Eligible for fairness
+        if vehicle in players_present and vehicle not in excluded:
+            eligible_km += km
+
+        # Vehicle actually used
+        if vehicle in selected_vehicles:
+            vehicle_km += km
+
+    if eligible_km == 0:
+        return 0
+
+    return vehicle_km / eligible_km
 
 def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_groups, history):
     """
@@ -198,9 +244,8 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
         if not filtered_eligible:
             break
 
-        def usage_ratio(p):
-            u = usage.get(p, {"used": 0, "present": 0})
-            return u["used"] / u["present"] if u["present"] > 0 else 0
+        def km_ratio(p):
+            return calculate_km_ratio(p, history)
 
         def recency_score(p):
             # Higher = longer ago used (or never used)
@@ -209,7 +254,7 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
         # Sort by: 1️⃣ least used, 2️⃣ least recently used, 3️⃣ list order
         ordered = sorted(
             filtered_eligible,
-            key=lambda p: (usage_ratio(p), -recency_score(p), vehicle_set.index(p))
+            key=lambda p: (km_ratio(p), -recency_score(p), vehicle_set.index(p))
         )
 
         pick = ordered[0]
