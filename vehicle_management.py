@@ -235,7 +235,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
                 ws_groups.clear()
                 ws_groups.append_row(["Vehicle","Players"])
                 ws_history.clear()
-                ws_history.append_row(["date","ground","players_present","selected_vehicles","message"])
+                ws_history.append_row(["date","ground","km","players_present","selected_vehicles","message"])
                 st.sidebar.success("✅ All data reset")
                 # Reset backup flag
                 st.session_state.backup_downloaded = False
@@ -421,7 +421,26 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
         admin_disabled = not st.session_state.admin_logged_in
 
         game_date = st.date_input("Select date:", value=datetime.date.today(),disabled=admin_disabled)
-        ground_name = st.text_input("Ground name:",disabled=admin_disabled)
+        #ground_name = st.text_input("Ground name:",disabled=admin_disabled)
+        ground_options = sorted(
+            [g["Ground"] for g in grounds if g.get("Ground")]
+        )
+
+        ground_name = st.selectbox(
+            "Select Ground:",
+            ground_options,
+            disabled=admin_disabled
+        )
+
+        selected_ground_km = 0
+
+        for g in grounds:
+            if g.get("Ground") == ground_name:
+                selected_ground_km = int(g.get("KM", 0))
+            break
+    
+        st.info(f"📍 Distance: {selected_ground_km} km")
+
         players_today = st.multiselect("Select players present today:", sorted(players),disabled=admin_disabled)
         num_needed = st.number_input("Number of vehicles needed:", 1, len(vehicles) if vehicles else 1, 1, disabled=admin_disabled)
         selection_mode = st.radio("Vehicle Selection Mode:", ["Auto-Select", "Manual-Select"], key="mode",disabled=admin_disabled)
@@ -451,6 +470,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
                 history.append({
                     "date": str(game_date),
                     "ground": ground_name,
+                    "km": selected_ground_km,
                     "players_present": players_today,
                     "selected_vehicles": selected,
                     "message": msg
@@ -459,7 +479,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
 
         if st.button("💾 Save Match History to Google Sheet", disabled=admin_disabled) and client:
             try:
-                data = [["date","ground","players_present","selected_vehicles","message"]]
+                data = [["date","ground","km","players_present","selected_vehicles","message"]]
         
                 for r in history:
                     players_str = ", ".join(r["players_present"]) if isinstance(r["players_present"], list) else r["players_present"]
@@ -468,6 +488,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
                     data.append([
                         r["date"],
                         r["ground"],
+                        r.get("km", 0),
                         players_str,
                         vehicles_str,
                         r["message"]
@@ -515,7 +536,8 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
                 display_vehicles = ", ".join(vehicles_value)
             else:
                 display_vehicles = vehicles_value
-            st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {display_vehicles}")
+            st.write(f"📅 {r['date']} — {r['ground']} ({r.get('km',0)} km) — 🚗 {display_vehicles}")
+            #st.write(f"📅 {r['date']} — {r['ground']} — 🚗 {display_vehicles}")
     else:
         st.info("No match records yet")
     
