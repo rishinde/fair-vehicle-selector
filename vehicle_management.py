@@ -9,6 +9,9 @@ def build_vehicle_trail(vehicle, history):
 
     trail = []
 
+    ov_km = 0
+    total_km = 0
+
     for record in history:
 
         km = int(float(record.get("km", 0)))
@@ -38,20 +41,23 @@ def build_vehicle_trail(vehicle, history):
                 if p.strip()
             ]
 
-        # Skip if absent
         if vehicle not in players_present:
             continue
 
-        # Skip if excluded
         if vehicle in excluded:
             continue
 
-        if vehicle in selected_vehicles:
-            trail.append(f"🔵OV({km})")
-        else:
-            trail.append(f"🟢TV({km})")
+        total_km += km
 
-    return " → ".join(trail)
+        if vehicle in selected_vehicles:
+            trail.append(f"🔵TV({km})")
+        else:
+            trail.append(f"🟢OV({km})")
+            ov_km += km
+
+    trail_text = " → ".join(trail)
+
+    return f"{trail_text} | OV:{ov_km}/{total_km}"
 
 def calculate_km_stats(vehicle, history):
 
