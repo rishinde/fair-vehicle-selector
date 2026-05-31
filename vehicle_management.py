@@ -235,7 +235,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
                 ws_groups.clear()
                 ws_groups.append_row(["Vehicle","Players"])
                 ws_history.clear()
-                ws_history.append_row(["date","ground","km","players_present","selected_vehicles","message"])
+                ws_history.append_row(["date","ground","km","players_present","excluded_vehicle_owners","selected_vehicles","message"])
                 st.sidebar.success("✅ All data reset")
                 # Reset backup flag
                 st.session_state.backup_downloaded = False
@@ -443,6 +443,15 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
 
         players_today = st.multiselect("Select players present today:", sorted(players),disabled=admin_disabled)
         num_needed = st.number_input("Number of vehicles needed:", 1, len(vehicles) if vehicles else 1, 1, disabled=admin_disabled)
+
+        excluded_vehicle_owners = st.multiselect(
+            "Vehicle owners not available for selection today (optional)",
+            [p for p in players_today if p in vehicles],
+            default=[],
+            disabled=admin_disabled,
+            help="Use when a vehicle owner is present but should not be considered for vehicle fairness (e.g. came separately, vehicle unavailable, etc.)"
+        )
+
         selection_mode = st.radio("Vehicle Selection Mode:", ["Auto-Select", "Manual-Select"], key="mode",disabled=admin_disabled)
         
         if selection_mode == "Manual-Select":
@@ -472,6 +481,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
                     "ground": ground_name,
                     "km": selected_ground_km,
                     "players_present": players_today,
+                    "excluded_vehicle_owners": excluded_vehicle_owners,
                     "selected_vehicles": selected,
                     "message": msg
                 })
@@ -484,12 +494,14 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
                 for r in history:
                     players_str = ", ".join(r["players_present"]) if isinstance(r["players_present"], list) else r["players_present"]
                     vehicles_str = ", ".join(r["selected_vehicles"]) if isinstance(r["selected_vehicles"], list) else r["selected_vehicles"]
-        
+                    excluded_str = ", ".join(r.get("excluded_vehicle_owners", [])
+)        
                     data.append([
                         r["date"],
                         r["ground"],
                         r.get("km", 0),
                         players_str,
+                        excluded_str,
                         vehicles_str,
                         r["message"]
                     ])
