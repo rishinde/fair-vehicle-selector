@@ -186,7 +186,7 @@ def calculate_km_ratio(vehicle, history):
 
     return vehicle_km / eligible_km
 
-def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_groups, history):
+def select_vehicles_auto(vehicle_set, players_today, excluded_vehicle_owners, num_needed, usage, vehicle_groups, history):
     """
     Fairly select vehicles with following logic:
     ✅ Exclude vehicles (and their groups) used in the last match.
@@ -196,7 +196,7 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
     import streamlit as st
 
     selected = []
-    eligible = [v for v in players_today if v in vehicle_set]
+    eligible = [v for v in players_today if v in vehicle_set and v not in excluded_vehicle_owners]
 
     # --- Step 1: Collect vehicles used in last match ---
     recently_used = set()
@@ -563,7 +563,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
 
             eligible = [v for v in players_today if v in vehicles]
             if selection_mode=="Auto-Select":
-                selected = select_vehicles_auto(vehicles, players_today, num_needed, usage, vehicle_groups, history)
+                selected = select_vehicles_auto(vehicles, players_today, excluded_vehicle_owners, num_needed, usage, vehicle_groups, history)
                 update_usage(selected, eligible, usage)
             else:
                 if len(manual_selected) != num_needed:
@@ -659,8 +659,16 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
 
         df_km = pd.DataFrame(km_rows)
 
-        st.table(df_km)
+        df_km = df_km.sort_values(
+            "KM Ratio",
+            ascending=True
+        ).reset_index(drop=True)
 
+        df_km.index += 1
+        df_km.index.name = "Rank"
+
+        st.table(df_km)
+        
     else:
         st.info("No KM history yet")
     
