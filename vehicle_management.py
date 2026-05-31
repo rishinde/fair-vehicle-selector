@@ -57,7 +57,7 @@ def build_vehicle_trail(vehicle, history):
 
     trail_text = " → ".join(trail)
 
-    return f"{trail_text} | OV:{ov_km}/{total_km}"
+    return f"{trail_text} | OV/TOTAL:{ov_km}/{total_km}"
 
 def calculate_km_stats(vehicle, history):
 
@@ -768,7 +768,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
                 history
             )
     
-            st.write("rishi")
+            #st.write("rishi")
             st.write(repr(trail))
             st.markdown(
                 f"**🚗 {vehicle}**\n\n{trail}"
