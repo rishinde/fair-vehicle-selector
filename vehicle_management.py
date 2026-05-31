@@ -5,6 +5,54 @@ import pandas as pd
 import plotly.express as px
 import time
 
+def build_vehicle_trail(vehicle, history):
+
+    trail = []
+
+    for record in history:
+
+        km = int(float(record.get("km", 0)))
+
+        players_present = record.get("players_present", [])
+        selected_vehicles = record.get("selected_vehicles", [])
+        excluded = record.get("excluded_vehicle_owners", [])
+
+        if isinstance(players_present, str):
+            players_present = [
+                p.strip()
+                for p in players_present.split(",")
+                if p.strip()
+            ]
+
+        if isinstance(selected_vehicles, str):
+            selected_vehicles = [
+                p.strip()
+                for p in selected_vehicles.split(",")
+                if p.strip()
+            ]
+
+        if isinstance(excluded, str):
+            excluded = [
+                p.strip()
+                for p in excluded.split(",")
+                if p.strip()
+            ]
+
+        # Skip if absent
+        if vehicle not in players_present:
+            continue
+
+        # Skip if excluded
+        if vehicle in excluded:
+            continue
+
+        if vehicle in selected_vehicles:
+            trail.append(f"🔵TV({km})")
+        else:
+            trail.append(f"🟢OV({km})")
+
+    return " → ".join(trail)
+
 def calculate_km_stats(vehicle, history):
 
     vehicle_km = 0
@@ -668,7 +716,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
         df_km.index.name = "Rank"
 
         st.table(df_km)
-        
+
     else:
         st.info("No KM history yet")
     
@@ -703,4 +751,21 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
             mime="text/csv"
         )
 
-    return vehicles, vehicle_groups, history, usage
+    st.header("5️⃣ Vehicle Journey Trail")
+
+    if history:
+    
+        for vehicle in sorted(vehicles):
+        
+            trail = build_vehicle_trail(
+                vehicle,
+                history
+            )
+    
+            st.markdown(
+                f"**🚗 {vehicle}**\n\n{trail}"
+            )
+    
+    else:
+        st.info("No history available")
+        return vehicles, vehicle_groups, history, usage
