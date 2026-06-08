@@ -18,8 +18,7 @@ def build_vehicle_timeline(vehicle, history):
 
     for record in recent_history:
 
-        km = int(float(record.get("km", 0)))
-)
+        km = int(record.get("km", 0))
 
         players_present = record.get("players_present", [])
         selected_vehicles = record.get("selected_vehicles", [])
