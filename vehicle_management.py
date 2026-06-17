@@ -91,11 +91,20 @@ def build_vehicle_trail(vehicle, history):
 
         total_km += km
 
+        match_date = str(record.get("date", ""))
+
+        # Convert YYYY-MM-DD → DD/MM
+        try:
+            display_date = datetime.datetime.strptime(
+            match_date,"%Y-%m-%d").strftime("%d/%m")
+        except:
+            display_date = match_date
+
         if vehicle in selected_vehicles:
-            trail.append(f"🔵OV({km})")
+            trail.append(f"🔵OV({km}km-{display_date})")
             ov_km += km
         else:
-            trail.append(f"🟢TV({km})")
+            trail.append(f"🟢TV({km}km-{display_date})")
 
     trail_text = " → ".join(trail)
 
