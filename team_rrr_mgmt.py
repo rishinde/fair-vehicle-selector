@@ -313,10 +313,6 @@ with tabs[1]:
 # -----------------------------
 # Tab 3: Financial Management (Placeholder)
 # -----------------------------
-with tabs[2]:
-    st.header("💰 Financial Management")
-    #financial_management(players, client)
-    st.info("Financial management tab will be implemented here.")
 with tabs[3]:
     st.header("Cricket Analytics")
     player_stats_management(players, client)
