@@ -313,6 +313,6 @@ with tabs[1]:
 # -----------------------------
 # Tab 3: Financial Management (Placeholder)
 # -----------------------------
-with tabs[3]:
+with tabs[2]:
     st.header("Cricket Analytics")
     player_stats_management(players, client)
