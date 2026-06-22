@@ -315,4 +315,4 @@ with tabs[1]:
 # -----------------------------
 with tabs[2]:
     st.header("Cricket Analytics")
-    player_stats_management(players, client)
+    cricket_analytics(players, client)

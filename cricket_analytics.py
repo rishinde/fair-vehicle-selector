@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 
 
-def cricket_analytics(players):
+def cricket_analytics(players, client):
 
     st.header("🏏 Cricket Analytics")
 
