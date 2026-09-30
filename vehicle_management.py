@@ -690,7 +690,7 @@ def vehicle_management(players, vehicles, vehicle_groups, history, usage, ground
                     "players_present": players_today,
                     "excluded_vehicle_owners": excluded_vehicle_owners,
                     "selected_vehicles": selected,
-                    "message": msg
+                    "message": ""
                 })
                 st.success(f"✅ Vehicles selected: {', '.join(selected)}")
 
