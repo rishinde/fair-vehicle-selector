@@ -213,7 +213,8 @@ def select_vehicles_auto(vehicle_set, players_today, num_needed, usage, vehicle_
         st.write("🕓 Recently Used vehicles:",recently_used)
 
     # --- Step 2: Exclude those vehicles/groups from current eligible list ---
-    filtered_eligible = [v for v in eligible if v not in recently_used]
+    #filtered_eligible = [v for v in eligible if v not in recently_used]
+    filtered_eligible = [v for v in eligible]
 
     st.write("🕓 Eligible vehicles for Selection:",filtered_eligible)
     if not filtered_eligible:
